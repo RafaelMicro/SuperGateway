@@ -1,0 +1,8 @@
+#!/bin/bash
+
+
+SSID="$1"
+
+sed -i 's/OpenWrt/'"${SSID}"'/' ./openwrt/files/etc/config/wireless
+
+echo "Setup SSID : " $SSID " done !"

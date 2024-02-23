@@ -1,0 +1,18 @@
+#!/bin/bash
+
+TARGET_PATH=targets/bcm27xx/bcm2711
+
+cd openwrt
+make $1 $2
+m_result=$?
+
+if [ $m_result = '0' ]; then
+	echo "Build Success"
+	mkdir  -p ../image
+	cp bin/$TARGET_PATH/openwrt-bcm27xx-bcm2711-rpi-4-ext4-factory.img.gz ../image/supergw-rpi4-ext4-factory.img.gz
+	cp bin/$TARGET_PATH/openwrt-bcm27xx-bcm2711-rpi-4-ext4-sysupgrade.img.gz ../image/supergw-rpi4-ext4-sysupgrade.img.gz
+	ls ../image -lh
+else
+	echo "Sometihng error ! Check log !"
+fi
+

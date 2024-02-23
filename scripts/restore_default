@@ -1,0 +1,5 @@
+#!/bin/bash
+
+
+cp build/files ./openwrt/ -r
+
