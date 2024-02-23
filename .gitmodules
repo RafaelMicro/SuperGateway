@@ -1,0 +1,6 @@
+[submodule "openwrt"]
+	path = openwrt
+	url = https://github.com/openwrt/openwrt.git
+[submodule "connectedhomeip"]
+	path = connectedhomeip
+	url = https://github.com/project-chip/connectedhomeip.git
