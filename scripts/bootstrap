@@ -12,6 +12,7 @@ cp build/files ./openwrt/ -r
 
 cd third_party/connectedhomeip
 
+git submodule init
 git submodule update third_party/pigweed \
   third_party/jsoncpp \
   third_party/nlassert \
