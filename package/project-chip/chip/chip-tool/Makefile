@@ -4,7 +4,7 @@ PKG_NAME:=chip-tool
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKG_LICENSE_FILES:=LICENSE
-LOCAL_SOURCE_DIR:=$(abspath $(realpath $(dir $(lastword $(MAKEFILE_LIST))))/../../../connectedhomeip)
+LOCAL_SOURCE_DIR:=$(abspath $(realpath $(dir $(lastword $(MAKEFILE_LIST))))/../../../third_party/connectedhomeip)
 
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_DEPENDS:=gn/host

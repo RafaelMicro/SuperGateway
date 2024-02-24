@@ -10,7 +10,7 @@ python3-distutils rsync unzip zlib1g-dev file wget
 cp config/def_config ./openwrt/.config
 cp build/files ./openwrt/ -r
 
-cd connectedhomeip
+cd third_party/connectedhomeip
 
 git submodule update third_party/pigweed \
   third_party/jsoncpp \
@@ -21,11 +21,10 @@ git submodule update third_party/pigweed \
   third_party/perfetto \
   third_party/libwebsockets 
 
-cd ../
-cd openwrt
+cd ../../openwrt
 cp feeds.conf.default feeds.conf
-echo src-git ezmesh https://github.com/RafaelMicro/EZMesh.git >> feeds.conf
-echo src-link chip $PWD/../package/project-chip >> feeds.conf
+echo src-link ezmesh $PWD/../package/RafaelMicro/EZMesh >> feeds.conf
+echo src-link chip $PWD/../package/project-chip/chip >> feeds.conf
 
 ./scripts/feeds update -a
 ./scripts/feeds install -a 
