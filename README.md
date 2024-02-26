@@ -7,6 +7,8 @@ The EZMesh, which uses a single Rafael's EZmesh Dongle, can support different co
 
 Support protocols : Bluetooth LE 5.3 / Thread 1.3 / Zigbee 3.0 / Rafael's Sub-G
 
+Default login address: [http://10.10.10.1](http://10.10.10.1), username: root, password: none 
+
 ## Supported Platform
 |Vendor|SoC|Board|
 |:---:|:---:|:---:|
@@ -14,15 +16,20 @@ Support protocols : Bluetooth LE 5.3 / Thread 1.3 / Zigbee 3.0 / Rafael's Sub-G
 |MediaTech|MT7981|MT7981 EVB|
 |MediaTech|MT7688|Linkit Smart 7688|
 
-## Build the firmware from sources
-This section describes how to build the firmware for suppoted pltform from source codes.
+## Development
+To build your own firmware you need a GNU/Linux, BSD or MacOS system.
 
-### Host environment
-The following operations are performed under a Ubuntu LTS 22.04 environment. For a Windows or a Mac OS X host computer, you can install a VM for having the same environment:
+### Requirements
+To build with this project, Ubuntu 22.04.04 LTS is prefereeed. And you need use the CPU based on AMD64 architecture, with at least 4GB RAM and 32 GB available disk space. Make sure your internet is accessible.
+
+You can install a VM for having the same environment:
 * Download Ubuntu 22.04 LTS image from [http://www.ubuntu.com](http://www.ubuntu.com)
 * Install this image with VirtualBox (http://virtualbox.org) on the host machine. 50GB disk space reserved for the VM is recommanded
 
-### Steps
+Note:
+* If you're using Windows Subsystem for Linux(WSL), please see [Build sysetem setup WSL](https://openwrt.org/docs/guide-developer/toolchain/wsl) documentation.
+
+### Quickstart
 In the Ubuntu system, open the *Terminal* application and type the following commands:
 
 1. Download SuperGateway source codes:
@@ -41,5 +48,8 @@ In the Ubuntu system, open the *Terminal* application and type the following com
    ```
    bash scripts/build_image -j4 V=s
    ```
-5. The firmware image will genetated at "Image" folder, you can flash the firmware into your platform!
+5. After the build process completes, the resulted firmware file will be under 'image'.
+   
+Note:
+* Depending on the H/W resources of the host environment, the build process may **take more than 2 hours**.
 
