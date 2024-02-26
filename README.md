@@ -53,3 +53,5 @@ In the Ubuntu system, open the *Terminal* application and type the following com
 Note:
 * Depending on the H/W resources of the host environment, the build process may **take more than 2 hours**.
 
+### Guide
+* [EZMesh usage](https://github.com/RafaelMicro/SuperGateway/blob/main/doc/ezmesh_userguide.md)
