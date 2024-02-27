@@ -39,7 +39,7 @@ In the Ubuntu system, open the *Terminal* application and type the following com
     ```
 2. Setup build system and load the defult config for building :
    ```
-   sudo bash scripts/bootstrap
+   bash scripts/bootstrap
    ```
 3. Setup the super gateway's SSID :
    ```
