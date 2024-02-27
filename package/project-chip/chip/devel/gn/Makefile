@@ -24,9 +24,9 @@ PKG_SOURCE_MIRROR:=0 # don't try OpenWrt mirror
 # PKG_SOURCE_VERSION to a new commit hash, GN_VERSION needs to be obtained via
 #   git describe HEAD --match initial-commit | cut -f 3 -d -
 # and updated below.
-PKG_SOURCE_DATE:=2023-07-24
-PKG_SOURCE_VERSION:=62ac86a938c365ccdbbbd9a9b49fb72fa3d6eb81
-PKG_MIRROR_HASH:=231e7e663ec3a374bb86a50904b2af6562c29aad03de43f6b4a03d1be1f083c5
+PKG_SOURCE_DATE:=2023-11-27
+PKG_SOURCE_VERSION:=0cdb7dd27f5cbafb31704a5d849efe17ef2a0acc
+#PKG_MIRROR_HASH:=231e7e663ec3a374bb86a50904b2af6562c29aad03de43f6b4a03d1be1f083c5
 GN_VERSION:=2116
 
 PKG_LICENSE:=BSD-3-Clause
