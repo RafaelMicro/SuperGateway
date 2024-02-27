@@ -35,10 +35,11 @@ In the Ubuntu system, open the *Terminal* application and type the following com
 1. Download SuperGateway source codes:
     ```
     git clone https://github.com/RafaelMicro/SuperGateway.git
+    cd SuperGateway
     ```
 2. Setup build system and load the defult config for building :
    ```
-   bash scripts/bootstrap
+   sudo bash scripts/bootstrap
    ```
 3. Setup the super gateway's SSID :
    ```
