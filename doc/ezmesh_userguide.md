@@ -32,7 +32,7 @@ Please see [CHIP Tool Guide](https://github.com/project-chip/connectedhomeip/blo
 
 #### OTA Provider
 Located: /usr/sbin/ota-provider-app
-Please see [Usage of ota-provider-app](https://github.com/project-chip/connectedhomeip/tree/master/examples/ota-provider-app/linux#usage)https://github.com/project-chip/connectedhomeip/tree/master/examples/ota-provider-app/linux#usage
+Please see [Usage of ota-provider-app](https://github.com/project-chip/connectedhomeip/tree/master/examples/ota-provider-app/linux#usage)
 
 #### Birdge Application
 Located: /usr/sbin/bridge-app
