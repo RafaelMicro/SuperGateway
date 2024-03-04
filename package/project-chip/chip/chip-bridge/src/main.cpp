@@ -51,6 +51,12 @@
 #include <iostream>
 #include <vector>
 
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 using namespace chip;
 using namespace chip::app;
 using namespace chip::Credentials;
@@ -150,22 +156,66 @@ namespace {
 
 void gw_cmd_on_req(uint16_t saddr, uint8_t ep)
 {
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+
     // uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x01, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xBF}; 
 
-    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     // cmd[9] = (uint8_t)(saddr & 0xFF); 
     // cmd[10] = (uint8_t)((saddr >> 8) & 0xFF); 
-    // cmd[12] = ep;       
+    // cmd[12] = ep;   
+
+    // int sockfd = 0;
+    // sockfd = socket(AF_INET , SOCK_STREAM , 0);
+
+    // if (sockfd == -1) {
+    //     ChipLogProgress(DeviceLayer, "Fail to create a socket.");
+    // }
+
+    // struct sockaddr_in info;
+    // bzero(&info, sizeof(info));
+    // info.sin_family = PF_INET;
+
+    // info.sin_addr.s_addr = inet_addr("127.0.0.1");
+    // info.sin_port = htons(10010);
+
+    // int err = connect(sockfd,(struct sockaddr *)&info, sizeof(info));
+    // if (err==-1) {
+    //     ChipLogProgress(DeviceLayer, "Connection error");
+    // }    
+    // send(sockfd, cmd, sizeof(cmd), 0);    
+    // close(sockfd);
 }
 
 void gw_cmd_off_req(uint16_t saddr, uint8_t ep)
 {
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+
     // uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xBF}; 
 
-    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     // cmd[9] = (uint8_t)(saddr & 0xFF); 
     // cmd[10] = (uint8_t)((saddr >> 8) & 0xFF); 
-    // cmd[12] = ep;       
+    // cmd[12] = ep;   
+
+    // int sockfd = 0;
+    // sockfd = socket(AF_INET , SOCK_STREAM , 0);
+
+    // if (sockfd == -1) {
+    //     ChipLogProgress(DeviceLayer, "Fail to create a socket.");
+    // }
+
+    // struct sockaddr_in info;
+    // bzero(&info, sizeof(info));
+    // info.sin_family = PF_INET;
+
+    // info.sin_addr.s_addr = inet_addr("127.0.0.1");
+    // info.sin_port = htons(10010);
+
+    // int err = connect(sockfd,(struct sockaddr *)&info, sizeof(info));
+    // if (err==-1) {
+    //     ChipLogProgress(DeviceLayer, "Connection error");
+    // }   
+    // send(sockfd, cmd, sizeof(cmd), 0);    
+    // close(sockfd);
 }
 
 void MatterReportingAttributeChangeCallback(EndpointId endpoint, ClusterId clusterId, AttributeId attributeId)
