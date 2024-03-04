@@ -41,6 +41,8 @@ void Device::SetReachable(bool aReachable)
 {
     bool changed = (mReachable != aReachable);
 
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    
     mReachable = aReachable;
 
     if (aReachable)
@@ -78,7 +80,7 @@ void Device::SetLocation(std::string szLocation)
 
     mLocation = szLocation;
 
-    ChipLogProgress(DeviceLayer, "Device[%s]: Location=\"%s\"", mName, mLocation.c_str());
+    // ChipLogProgress(DeviceLayer, "Device[%s]: Location=\"%s\"", mName, mLocation.c_str());
 
     if (changed)
     {
@@ -88,19 +90,19 @@ void Device::SetLocation(std::string szLocation)
 
 DeviceOnOff::DeviceOnOff(const char * szDeviceName, std::string szLocation) : Device(szDeviceName, szLocation)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     mOn = false;
 }
 
 bool DeviceOnOff::IsOn()
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     return mOn;
 }
 
 void DeviceOnOff::SetOnOff(bool aOn)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     bool changed;
 
     changed = aOn ^ mOn;
@@ -109,26 +111,27 @@ void DeviceOnOff::SetOnOff(bool aOn)
 
     if ((changed) && (mChanged_CB))
     {
+        // ChipLogProgress(DeviceLayer, "Light Control Callback");
         mChanged_CB(this, kChanged_OnOff);
     }
 }
 
 void DeviceOnOff::Toggle()
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     bool aOn = !IsOn();
     SetOnOff(aOn);
 }
 
 void DeviceOnOff::SetChangeCallback(DeviceCallback_fn aChanged_CB)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     mChanged_CB = aChanged_CB;
 }
 
 void DeviceOnOff::HandleDeviceChange(Device * device, Device::Changed_t changeMask)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     if (mChanged_CB)
     {
         mChanged_CB(this, (DeviceOnOff::Changed_t) changeMask);

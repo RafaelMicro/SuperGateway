@@ -40,6 +40,7 @@
 
 #include <pthread.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 
 #include "CommissionableInit.h"
 #include "Device.h"
@@ -57,6 +58,70 @@ using namespace chip::Inet;
 using namespace chip::Transport;
 using namespace chip::DeviceLayer;
 using namespace chip::app::Clusters;
+
+// #define NONE             "\033[m"
+// #define RED              "\033[0;32;31m"
+// #define LIGHT_RED        "\033[1;31m"
+// #define GREEN            "\033[0;32;32m"
+// #define LIGHT_GREEN      "\033[1;32m"
+// #define BLUE             "\033[0;32;34m"
+// #define LIGHT_BLUE       "\033[1;34m" 
+// #define CYAN             "\033[0;36m"
+// #define PUPLE            "\033[0;35m"
+// #define BRON             "\033[0;33m"
+// #define YELLOW           "\033[1;33m"
+// #define WHITE            "\033[1;37m" 
+
+#define EndDeviceMax              250
+#define EndPointMax               10
+#define ClusterIDMax              30
+
+struct _EndPoint
+{
+    unsigned char ep;
+    unsigned short devidId;
+    unsigned short clusterCounts;
+    unsigned short clusterID[ClusterIDMax];
+};
+
+struct _EndDevice
+{
+    unsigned char  MacAddress[8];   //Mac Address(64bits)
+    unsigned char  Active;	
+    unsigned short ShortAddress;    //Short Address(16bits)
+    unsigned char ep_counts;
+    struct _EndPoint ep_list[EndPointMax];
+};
+
+struct _Coordinator
+{
+    unsigned char  MacAddress[8];   //Mac Address(64bits)
+    unsigned short PANID;
+    unsigned short DevCount;
+    unsigned short ARCount;
+    unsigned char  CHANNEL;
+    unsigned char  EXT_PAN_ID[8];
+};
+
+struct _MatterEndDevice
+{
+    EndpointId  endpoint;
+    ClusterId   clusterId;
+    AttributeId attributeId;
+    _EndDevice  ED;
+};
+
+struct _EndDevice ED[EndDeviceMax];
+struct _Coordinator CR;
+struct _MatterEndDevice MED[EndDeviceMax];
+
+char EndDevice_Filename[]="/usr/local/var/lib/ez-zbgw/zbdb/sc_enddevice.dat";
+char Coordinator_Filename[]="/usr/local/var/lib/ez-zbgw/zbdb/sc_coordinator.dat";
+// int light_id = 0;
+int light_count = 0;
+bool add_ep = false;
+
+DeviceOnOff *Light[EndDeviceMax];
 
 namespace {
 
@@ -82,13 +147,76 @@ const int16_t initialMeasuredValue = 100;
 #define DEVICE_VERSION_DEFAULT 1
 
 namespace {
+
+void gw_cmd_on_req(uint16_t saddr, uint8_t ep)
+{
+    // uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x01, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xBF}; 
+
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // cmd[9] = (uint8_t)(saddr & 0xFF); 
+    // cmd[10] = (uint8_t)((saddr >> 8) & 0xFF); 
+    // cmd[12] = ep;       
+}
+
+void gw_cmd_off_req(uint16_t saddr, uint8_t ep)
+{
+    // uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xBF}; 
+
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // cmd[9] = (uint8_t)(saddr & 0xFF); 
+    // cmd[10] = (uint8_t)((saddr >> 8) & 0xFF); 
+    // cmd[12] = ep;       
+}
+
+void MatterReportingAttributeChangeCallback(EndpointId endpoint, ClusterId clusterId, AttributeId attributeId)
+{
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+
+    // AttributePathParams info;
+    // info.mClusterId   = clusterId;
+    // info.mAttributeId = attributeId;
+    // info.mEndpointId  = endpoint;
+
+    uint16_t endpointIndex = emberAfGetDynamicIndexFromEndpoint(endpoint);
+    ChipLogProgress(DeviceLayer, "Matter Endpoint: %x", endpoint);
+    ChipLogProgress(DeviceLayer, "Matter Cluster: %x", clusterId);
+    ChipLogProgress(DeviceLayer, "Matter Attribute: %x", attributeId);
+    ChipLogProgress(DeviceLayer, "Matter OnOff: %s", Light[endpointIndex]->IsOn() ? "On" : "Off");
+    ChipLogProgress(DeviceLayer, "Zigbee Address: %x", MED[endpointIndex].ED.ShortAddress);
+    for (int i = 0; i < MED[endpointIndex].ED.ep_counts; i++)
+    {
+        if (MED[endpointIndex].ED.ep_list[i].ep <= 0xF0) 
+        {
+            ChipLogProgress(DeviceLayer, "Zigbee Endpoint: %x", MED[endpointIndex].ED.ep_list[i].ep);
+            if (Light[endpointIndex]->IsOn())
+            {
+                gw_cmd_on_req(MED[endpointIndex].ED.ShortAddress, MED[endpointIndex].ED.ep_list[i].ep);
+            }
+            else
+            {
+                gw_cmd_off_req(MED[endpointIndex].ED.ShortAddress, MED[endpointIndex].ED.ep_list[i].ep);
+            }
+        }
+    }
+
+    // chip::DeviceLayer::PlatformMgr().ScheduleWork();
+}
+
+void MatterReportingAttributeChangeCallback(const ConcreteAttributePath & aPath)
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    return MatterReportingAttributeChangeCallback(aPath.mEndpointId, aPath.mClusterId, aPath.mAttributeId);
+}
+
 void CallReportingCallback(intptr_t closure){
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     auto path = reinterpret_cast<app::ConcreteAttributePath *>(closure);
     MatterReportingAttributeChangeCallback(*path);
     Platform::Delete(path);
 };
 
 void ScheduleReportingCallback(Device * dev, ClusterId cluster, AttributeId attribute){
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), cluster, attribute);
     PlatformMgr().ScheduleWork(CallReportingCallback, reinterpret_cast<intptr_t>(path));
 };
@@ -97,13 +225,14 @@ void ScheduleReportingCallback(Device * dev, ClusterId cluster, AttributeId attr
 
 void HandleDeviceStatusChanged(Device * dev, Device::Changed_t itemChangedMask)
 {
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     if (itemChangedMask & Device::kChanged_Reachable) { ScheduleReportingCallback(dev, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::Reachable::Id); }
     if (itemChangedMask & Device::kChanged_Name) { ScheduleReportingCallback(dev, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id); }
 }
 
-
 void HandleDeviceOnOffStatusChanged(DeviceOnOff * dev, DeviceOnOff::Changed_t itemChangedMask)
 {
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     if (itemChangedMask & (DeviceOnOff::kChanged_Reachable | DeviceOnOff::kChanged_Name | DeviceOnOff::kChanged_Location))
         HandleDeviceStatusChanged(static_cast<Device *>(dev), (Device::Changed_t) itemChangedMask);
     if (itemChangedMask & DeviceOnOff::kChanged_OnOff)
@@ -113,7 +242,7 @@ void HandleDeviceOnOffStatusChanged(DeviceOnOff * dev, DeviceOnOff::Changed_t it
 int AddDeviceEndpoint(Device * dev, EmberAfEndpointType * ep, const Span<const EmberAfDeviceType> & deviceTypeList,
                       const Span<DataVersion> & dataVersionStorage, chip::EndpointId parentEndpointId = chip::kInvalidEndpointId)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     uint8_t index = 0;
     while (index < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT)
     {
@@ -152,16 +281,15 @@ int AddDeviceEndpoint(Device * dev, EmberAfEndpointType * ep, const Span<const E
     return -1;
 }
 
-int light_id=0;
-void AddLightEP(){
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    std::string node = "Light" +  std::to_string(light_id);
+void AddLightEP(int light_number)
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    std::string node = "Light " +  std::to_string(light_number + 1);
     std::string room = "Office";
-    light_id++;
 
-    DeviceOnOff Light((char *)node.c_str(), room);
-    Light.SetReachable(true);
-    Light.SetChangeCallback(&HandleDeviceOnOffStatusChanged);
+    Light[light_number] = new DeviceOnOff(node.c_str(), room);
+    Light[light_number]->SetReachable(true);
+    Light[light_number]->SetChangeCallback(HandleDeviceOnOffStatusChanged);
 
     EmberAfAttributeMetadata onOffAttrs[] = { 
         { ZAP_EMPTY_DEFAULT(), OnOff::Attributes::OnOff::Id, 1, ZAP_TYPE(BOOLEAN), 0 | ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE) },
@@ -201,13 +329,157 @@ void AddLightEP(){
 
     const EmberAfDeviceType BridgedOnOffDeviceTypes[] = { { DEVICE_TYPE_LO_ON_OFF_LIGHT, DEVICE_VERSION_DEFAULT },
                                                         { DEVICE_TYPE_BRIDGED_NODE, DEVICE_VERSION_DEFAULT } };
-    DataVersion* Light1DataVersions = (DataVersion *) malloc(ArraySize(bridgedLightClusters) * sizeof (DataVersion));
-    size_t Light1DataVersionsLength = ArraySize(bridgedLightClusters);
+    DataVersion* LightDataVersions = (DataVersion *) malloc(ArraySize(bridgedLightClusters) * sizeof (DataVersion));
+    size_t LightDataVersionsLength = ArraySize(bridgedLightClusters);
 
-    AddDeviceEndpoint(&Light, &bridgedLightEndpoint, Span<const EmberAfDeviceType>(BridgedOnOffDeviceTypes),
-        Span<DataVersion>(Light1DataVersions, Light1DataVersionsLength), 1);
+    AddDeviceEndpoint(Light[light_number], &bridgedLightEndpoint, Span<const EmberAfDeviceType>(BridgedOnOffDeviceTypes),
+        Span<DataVersion>(LightDataVersions, LightDataVersionsLength), 1);
 };
 
+int FileExist(char *fname)
+{
+    struct stat st;
+    return(stat(fname, &st)==0);
+}
+
+void Check_Dev_Info()
+{
+    int i, j, k;
+
+    for (i = 0; i < EndDeviceMax; i++) 
+    {
+        if (ED[i].Active == 0)
+            continue;
+        // ChipLogProgress(DeviceLayer, "\r\n\r\n **** Check Zigbee Device Cluster \r\n\r\n");
+        ChipLogProgress(DeviceLayer, "Device %d", i);
+        ChipLogProgress(DeviceLayer, "MAC Address: %02X%02X%02X%02X%02X%02X%02X%02X", 
+            ED[i].MacAddress[0], 
+            ED[i].MacAddress[1], 
+            ED[i].MacAddress[2], 
+            ED[i].MacAddress[3], 
+            ED[i].MacAddress[4], 
+            ED[i].MacAddress[5], 
+            ED[i].MacAddress[6], 
+            ED[i].MacAddress[7]);
+        ChipLogProgress(DeviceLayer, "Short Addr: %04X", ED[i].ShortAddress);
+        for (j = 0; j < ED[i].ep_counts; j++)
+        {
+            ChipLogProgress(DeviceLayer, "EP-%d", j);
+            ChipLogProgress(DeviceLayer, "Endpoint: %d", ED[i].ep_list[j].ep);
+            ChipLogProgress(DeviceLayer, "Device Id: %d", ED[i].ep_list[j].devidId);
+            ChipLogProgress(DeviceLayer, "Cluster Id");
+            for (k = 0; k < ED[i].ep_list[j].clusterCounts; k++) 
+            {
+                ChipLogProgress(DeviceLayer, "0x%04X", ED[i].ep_list[j].clusterID[k]);
+                if (ED[i].ep_list[j].clusterID[k] == 0x0006)
+                {
+                    MED[light_count].ED = ED[i];
+                    MED[light_count].endpoint = (EndpointId)i;
+                    MED[light_count].clusterId = 6;
+                    MED[light_count].attributeId = 0;
+                    light_count++;
+                }
+            }
+        }
+    }
+}
+
+void Clear_EndDevice_Information()
+{
+    int i, j;
+    //---------------------------------
+    for (i = 0; i < EndDeviceMax; i++)
+    {
+        //----------------------------
+        memset(ED[i].MacAddress,0x00,8);  
+        //----------------------------   
+        ED[i].ShortAddress=0;    
+        ED[i].Active=0;         
+        ED[i].ep_counts=0;
+
+        for(j=0;j<EndPointMax;j++)
+            memset(&ED[i].ep_list[j], 0x00, sizeof(struct _EndPoint));
+    }
+}
+
+void Read_EndDevice_File() 
+{      
+    FILE    *fp;
+    // int     i;
+    size_t  rsize;
+    //----------------------------------------------------------
+    // printf(GREEN"Get coordinator register endpoint device form file !\n"NONE);
+    //----------------------------------------------------------   
+    CR.DevCount=0;
+    //----------------------------------------------------------
+    Clear_EndDevice_Information();
+    //--------------------------------------------------------
+    if (FileExist(EndDevice_Filename))
+    {                
+       fp = fopen(EndDevice_Filename,"rb");
+       if (fp != NULL)
+       {
+           while(1)
+           {
+              rsize = fread(&ED[CR.DevCount].MacAddress[0],sizeof(struct _EndDevice),1,fp);
+              if (rsize != 1)
+                break;              
+              //-------------------------------------------------------------------------
+              CR.DevCount++;
+           } 
+           //----------------------------------------------------------------------------
+           fclose(fp);
+       }
+       else    
+       {   
+        //   printf(LIGHT_RED"EndPoint_Filename Open Failure !\n"NONE);
+       }
+    }
+    else
+    {
+        // printf(LIGHT_BLUE"EndDevice table is empty !\n"NONE);
+        CR.DevCount=0;
+    }
+}
+
+void ChipEventHandler(const ChipDeviceEvent * aEvent, intptr_t /* arg */)
+{
+    ChipLogProgress(NotSpecified, "ChipEventHandler: %x", aEvent->Type);
+    
+    switch (aEvent->Type)
+    {
+    case DeviceEventType::kCHIPoBLEAdvertisingChange:
+        break;
+    case DeviceEventType::kCHIPoBLEConnectionClosed:
+    case DeviceEventType::kFailSafeTimerExpired:
+        break;
+    case DeviceEventType::kThreadStateChange:
+        break;
+    case DeviceEventType::kThreadConnectivityChange:
+        break;
+    case DeviceEventType::kCHIPoBLEConnectionEstablished:
+        break;
+    case DeviceEventType::kCommissioningComplete:
+        ChipLogProgress(NotSpecified, "kCommissioningComplete");
+        break;
+    // case DeviceEventType::kRemoveFabricEvent:
+    //     if (chip::Server::GetInstance().GetFabricTable().FabricCount() == 0)
+    //     {
+    //         chip::DeviceLayer::SystemLayer().StartTimer(chip::System::Clock::Milliseconds32(1000), FactoryResetEventHandler, nullptr);
+    //     }
+    //     break;
+    // case DeviceEventType::kOnOffAttributeChanged:
+    //     break;
+    // case DeviceEventType::kLevelControlAttributeChanged:
+    //     break;
+    // case DeviceEventType::kColorControlAttributeHSVChanged:
+    //     break;
+    // case DeviceEventType::kColorControlAttributeCTChanged:
+    //     break;
+    default:
+        break;
+    }
+}
 
 } // namespace
 
@@ -227,7 +499,7 @@ void AddLightEP(){
 
 int RemoveDeviceEndpoint(Device * dev)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     uint8_t index = 0;
     while (index < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT)
     {
@@ -250,7 +522,7 @@ int RemoveDeviceEndpoint(Device * dev)
 
 std::vector<EndpointListInfo> GetEndpointListInfo(chip::EndpointId parentId)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     std::vector<EndpointListInfo> infoList;
 
     for (auto room : gRooms)
@@ -291,14 +563,14 @@ std::vector<EndpointListInfo> GetEndpointListInfo(chip::EndpointId parentId)
 
 std::vector<Action *> GetActionListInfo(chip::EndpointId parentId)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     return gActions;
 }
 
 EmberAfStatus HandleReadBridgedDeviceBasicAttribute(Device * dev, chip::AttributeId attributeId, uint8_t * buffer,
                                                     uint16_t maxReadLength)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     using namespace BridgedDeviceBasicInformation::Attributes;
 
     ChipLogProgress(DeviceLayer, "HandleReadBridgedDeviceBasicAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
@@ -332,7 +604,7 @@ EmberAfStatus HandleReadBridgedDeviceBasicAttribute(Device * dev, chip::Attribut
 
 EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev, chip::AttributeId attributeId, uint8_t * buffer, uint16_t maxReadLength)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     ChipLogProgress(DeviceLayer, "HandleReadOnOffAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
 
     if ((attributeId == OnOff::Attributes::OnOff::Id) && (maxReadLength == 1))
@@ -354,7 +626,7 @@ EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev, chip::AttributeId attr
 
 EmberAfStatus HandleWriteOnOffAttribute(DeviceOnOff * dev, chip::AttributeId attributeId, uint8_t * buffer)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     ChipLogProgress(DeviceLayer, "HandleWriteOnOffAttribute: attrId=%d", attributeId);
 
     if ((attributeId == OnOff::Attributes::OnOff::Id) && (dev->IsReachable()))
@@ -379,7 +651,7 @@ EmberAfStatus HandleWriteOnOffAttribute(DeviceOnOff * dev, chip::AttributeId att
 EmberAfStatus HandleReadTempMeasurementAttribute(DeviceTempSensor * dev, chip::AttributeId attributeId, uint8_t * buffer,
                                                  uint16_t maxReadLength)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     using namespace TemperatureMeasurement::Attributes;
 
     if ((attributeId == MeasuredValue::Id) && (maxReadLength == 2))
@@ -419,9 +691,9 @@ EmberAfStatus emberAfExternalAttributeReadCallback(EndpointId endpoint, ClusterI
                                                    const EmberAfAttributeMetadata * attributeMetadata, uint8_t * buffer,
                                                    uint16_t maxReadLength)
 {
-    ChipLogProgress(DeviceLayer, "\n\n**** %s", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s", __FUNCTION__);
     uint16_t endpointIndex = emberAfGetDynamicIndexFromEndpoint(endpoint);
-    ChipLogProgress(DeviceLayer, "endpoint: %d\tendpointIndex: %d\n\n", endpoint, endpointIndex);
+    ChipLogProgress(DeviceLayer, "endpoint: %d, endpointIndex: %d", endpoint, endpointIndex);
 
     EmberAfStatus ret = EMBER_ZCL_STATUS_FAILURE;
 
@@ -456,7 +728,7 @@ public:
     CHIP_ERROR
     Read(const ConcreteReadAttributePath & aPath, AttributeValueEncoder & aEncoder) override
     {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+        // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
         uint16_t powerSourceDeviceIndex = CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT;
 
         if ((gDevices[powerSourceDeviceIndex] != nullptr))
@@ -492,7 +764,6 @@ public:
             case PowerSource::Attributes::FeatureMap::Id:
                 aEncoder.Encode(dev->GetFeatureMap());
                 break;
-
             case PowerSource::Attributes::BatReplacementNeeded::Id:
                 aEncoder.Encode(false);
                 break;
@@ -512,12 +783,12 @@ BridgedPowerSourceAttrAccess gPowerAttrAccess;
 EmberAfStatus emberAfExternalAttributeWriteCallback(EndpointId endpoint, ClusterId clusterId,
                                                     const EmberAfAttributeMetadata * attributeMetadata, uint8_t * buffer)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     uint16_t endpointIndex = emberAfGetDynamicIndexFromEndpoint(endpoint);
 
     EmberAfStatus ret = EMBER_ZCL_STATUS_FAILURE;
 
-    // ChipLogProgress(DeviceLayer, "emberAfExternalAttributeWriteCallback: ep=%d", endpoint);
+    ChipLogProgress(DeviceLayer, "emberAfExternalAttributeWriteCallback: ep=%d", endpoint);
 
     if (endpointIndex < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT)
     {
@@ -532,41 +803,39 @@ EmberAfStatus emberAfExternalAttributeWriteCallback(EndpointId endpoint, Cluster
     return ret;
 }
 
-
 bool emberAfActionsClusterInstantActionCallback(app::CommandHandler * commandObj, const app::ConcreteCommandPath & commandPath,
                                                 const Actions::Commands::InstantAction::DecodableType & commandData)
 {
-
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     commandObj->AddStatus(commandPath, Protocols::InteractionModel::Status::NotFound);
     return true;
 }
 
-void ApplicationInit() {}
+void ApplicationInit() 
+{
+    Read_EndDevice_File();
+    Check_Dev_Info();
+    add_ep = true;
+}
 
 void ApplicationShutdown() {}
 
 #define POLL_INTERVAL_MS (100)
-uint8_t poll_prescale = 0;
+// uint8_t poll_prescale = 0;
+// const int16_t oneDegree = 100;
 
-bool kbhit()
-{
-    int byteswaiting;
-    ioctl(0, FIONREAD, &byteswaiting);
-    return byteswaiting > 0;
-}
-
-const int16_t oneDegree = 100;
-
-void * bridge_polling_thread(void * context)
+void *bridge_polling_thread(void * context)
 {
     while (true)
     {
-        if (kbhit())
+        if (add_ep)
         {
-            int ch = getchar();
-            if (ch=='1') { AddLightEP(); }
-            continue;
+            ChipLogProgress(DeviceLayer, "Light Count: %d", light_count);
+            for (int i = 0; i < light_count; i++)
+            {
+                AddLightEP(i);
+            }
+            add_ep = false;
         }
 
         // Sleep to avoid tight loop reading commands
@@ -615,11 +884,12 @@ int main(int argc, char * argv[])
             exit(1);
         }
     }
-
     // Run CHIP
 
     ApplicationInit();
+    // chip::DeviceLayer::PlatformMgr().ScheduleWork(AddLightEP);
     registerAttributeAccessOverride(&gPowerAttrAccess);
+    chip::DeviceLayer::PlatformMgr().AddEventHandler(ChipEventHandler, 0);
     chip::DeviceLayer::PlatformMgr().RunEventLoop();
 
     return 0;

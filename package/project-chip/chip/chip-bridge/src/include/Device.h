@@ -76,7 +76,7 @@ public:
     } Changed;
 
     DeviceOnOff(const char * szDeviceName, std::string szLocation);
-
+    virtual ~DeviceOnOff() {}
     bool IsOn();
     void SetOnOff(bool aOn);
     void Toggle();

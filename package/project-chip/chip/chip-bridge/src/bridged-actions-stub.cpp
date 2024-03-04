@@ -56,7 +56,7 @@ constexpr uint16_t ActionsAttrAccess::ClusterRevision;
 
 CHIP_ERROR ActionsAttrAccess::ReadActionListAttribute(EndpointId endpoint, AttributeValueEncoder & aEncoder)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     CHIP_ERROR err = aEncoder.EncodeList([&endpoint](const auto & encoder) -> CHIP_ERROR {
         std::vector<Action *> actionList = GetActionListInfo(endpoint);
 
@@ -81,7 +81,7 @@ CHIP_ERROR ActionsAttrAccess::ReadActionListAttribute(EndpointId endpoint, Attri
 
 CHIP_ERROR ActionsAttrAccess::ReadEndpointListAttribute(EndpointId endpoint, AttributeValueEncoder & aEncoder)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     std::vector<EndpointListInfo> infoList = GetEndpointListInfo(endpoint);
 
     CHIP_ERROR err = aEncoder.EncodeList([&infoList](const auto & encoder) -> CHIP_ERROR {
@@ -100,14 +100,14 @@ CHIP_ERROR ActionsAttrAccess::ReadEndpointListAttribute(EndpointId endpoint, Att
 
 CHIP_ERROR ActionsAttrAccess::ReadSetupUrlAttribute(EndpointId endpoint, AttributeValueEncoder & aEncoder)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     const char SetupUrl[] = "https://example.com";
     return aEncoder.Encode(chip::CharSpan::fromCharString(SetupUrl));
 }
 
 CHIP_ERROR ActionsAttrAccess::ReadClusterRevision(EndpointId endpoint, AttributeValueEncoder & aEncoder)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     return aEncoder.Encode(ClusterRevision);
 }
 
@@ -115,7 +115,7 @@ ActionsAttrAccess gAttrAccess;
 
 CHIP_ERROR ActionsAttrAccess::Read(const ConcreteReadAttributePath & aPath, AttributeValueEncoder & aEncoder)
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s", __FUNCTION__);
+    ChipLogProgress(DeviceLayer, "\n\n**** %s", __FUNCTION__);
     VerifyOrDie(aPath.mClusterId == Actions::Id);
 
     switch (aPath.mAttributeId)
@@ -141,6 +141,6 @@ CHIP_ERROR ActionsAttrAccess::Read(const ConcreteReadAttributePath & aPath, Attr
 
 void MatterActionsPluginServerInitCallback()
 {
-  ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     registerAttributeAccessOverride(&gAttrAccess);
 }

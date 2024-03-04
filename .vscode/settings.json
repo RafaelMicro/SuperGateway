@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "stdint.h": "c",
+        "chrono": "cpp",
+        "variant": "cpp",
+        "*.ipp": "cpp"
+    }
+}
