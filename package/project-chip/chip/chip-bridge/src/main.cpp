@@ -276,22 +276,30 @@ static void gw_cmd_read_attr_req(intptr_t arg)
     // ChipLogProgress(DeviceLayer, "Zigbee Address: %x", MED[endpointIndex].ShortAddress);   
     // ChipLogProgress(DeviceLayer, "Zigbee Endpoint: %x", MED[endpointIndex].ep);
 
-    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 
-                     0x0C, 
-                     0x00, 0x00, 0x02, 0x00, 
-                     0x00, 0x00, 
-                     0x00, 0x00, 
-                     0x00, 0x00, 
-                     0x00, 0x00, 
-                     0x00}; 
+    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 
+                           0x0C, 
+                           0x00, 0x00, 0x02, 0x00, 
+                           0x00, 0x00, 
+                           0x00, 0x00, 
+                           0x00, 0x00, 
+                           0x00, 0x00, 
+                           0x00}; 
 
-    cmd[9] = (uint8_t)(MED[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (uint8_t)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
+    cmd[9] = (unsigned char)(MED[endpointIndex].ShortAddress & 0xFF); 
+    cmd[10] = (unsigned char)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
     cmd[12] = MED[endpointIndex].ep;
-    cmd[13] = (uint8_t)(clusterId & 0xFF);
-    cmd[14] = (uint8_t)((clusterId >> 8) & 0xFF);  
-    cmd[15] = (uint8_t)(attributeId & 0xFF);
-    cmd[16] = (uint8_t)((attributeId >> 8) & 0xFF);  
+    cmd[13] = (unsigned char)(clusterId & 0xFF);
+    cmd[14] = (unsigned char)((clusterId >> 8) & 0xFF);  
+    cmd[15] = (unsigned char)(attributeId & 0xFF);
+    cmd[16] = (unsigned char)((attributeId >> 8) & 0xFF);  
+
+    unsigned char checksum = 0;
+
+    for (int i = 0; i < cmd[4]; i++)
+    {
+        checksum += cmd[4 + 1 + i];
+    }
+    cmd[sizeof(cmd) - 1] = ~checksum;
     
     printf(LIGHT_RED"send command: ");
     for (unsigned long i = 0; i < sizeof(cmd); i++)
@@ -325,11 +333,19 @@ static void gw_cmd_onoff_on_req(intptr_t arg)
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
 
-    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x01, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xBF}; 
+    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x01, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00}; 
 
-    cmd[9] = (uint8_t)(MED[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (uint8_t)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
-    cmd[12] = MED[endpointIndex].ep;   
+    cmd[9] = (unsigned char)(MED[endpointIndex].ShortAddress & 0xFF); 
+    cmd[10] = (unsigned char)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
+    cmd[12] = MED[endpointIndex].ep;  
+
+    unsigned char checksum = 0;
+
+    for (int i = 0; i < cmd[4]; i++)
+    {
+        checksum += cmd[4 + 1 + i];
+    }
+    cmd[sizeof(cmd) - 1] = ~checksum; 
   
     printf(LIGHT_RED"send command: ");
     for (unsigned long i = 0; i < sizeof(cmd); i++)
@@ -363,11 +379,19 @@ static void gw_cmd_onoff_off_req(intptr_t arg)
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
 
-    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xBF}; 
+    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00}; 
 
-    cmd[9] = (uint8_t)(MED[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (uint8_t)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
+    cmd[9] = (unsigned char)(MED[endpointIndex].ShortAddress & 0xFF); 
+    cmd[10] = (unsigned char)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
     cmd[12] = MED[endpointIndex].ep;    
+
+    unsigned char checksum = 0;
+
+    for (int i = 0; i < cmd[4]; i++)
+    {
+        checksum += cmd[4 + 1 + i];
+    }
+    cmd[sizeof(cmd) - 1] = ~checksum;
 
     printf(LIGHT_RED"send command: ");
     for (unsigned long i = 0; i < sizeof(cmd); i++)
@@ -950,6 +974,7 @@ EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev,
             printf(NONE"\r\n");
 
             *buffer = resp.buffer[19];
+            Light[emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId())]->Set(*buffer);
             gw_tx_response_queue.pop();
         }
         else

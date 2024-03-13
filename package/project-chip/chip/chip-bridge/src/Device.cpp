@@ -123,6 +123,11 @@ void DeviceOnOff::Toggle()
     SetOnOff(aOn);
 }
 
+void DeviceOnOff::Set(bool aOn)
+{
+    mOn = aOn;
+}
+
 void DeviceOnOff::SetChangeCallback(DeviceCallback_fn aChanged_CB)
 {
     // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
