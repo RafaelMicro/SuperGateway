@@ -133,12 +133,13 @@ typedef struct gw_command
 std::queue<gw_command_t> gw_rx_command_queue;
 std::queue<gw_command_t> gw_tx_command_queue;
 std::queue<gw_command_t> gw_tx_response_queue;
+std::map<int, struct _MatterEndDevice> bridge_device;
 
 sem_t wait_tx_sem, read_attribute_sem; 
 
 struct _EndDevice ED[EndDeviceMax];
 struct _Coordinator CR;
-struct _MatterEndDevice MED[EndDeviceMax];
+// struct _MatterEndDevice MED[EndDeviceMax];
 
 const char EndDevice_Filename[] = "/usr/local/var/lib/ez-zbgw/zbdb/sc_enddevice.dat";
 const char Coordinator_Filename[] = "/usr/local/var/lib/ez-zbgw/zbdb/sc_coordinator.dat";
@@ -285,9 +286,9 @@ static void gw_cmd_read_attr_req(intptr_t arg)
                            0x00, 0x00, 
                            0x00}; 
 
-    cmd[9] = (unsigned char)(MED[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (unsigned char)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
-    cmd[12] = MED[endpointIndex].ep;
+    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF); 
+    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF); 
+    cmd[12] = bridge_device[endpointIndex].ep;
     cmd[13] = (unsigned char)(clusterId & 0xFF);
     cmd[14] = (unsigned char)((clusterId >> 8) & 0xFF);  
     cmd[15] = (unsigned char)(attributeId & 0xFF);
@@ -335,9 +336,9 @@ static void gw_cmd_onoff_on_req(intptr_t arg)
 
     unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x01, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00}; 
 
-    cmd[9] = (unsigned char)(MED[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (unsigned char)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
-    cmd[12] = MED[endpointIndex].ep;  
+    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF); 
+    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF); 
+    cmd[12] = bridge_device[endpointIndex].ep;  
 
     unsigned char checksum = 0;
 
@@ -381,9 +382,9 @@ static void gw_cmd_onoff_off_req(intptr_t arg)
 
     unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00}; 
 
-    cmd[9] = (unsigned char)(MED[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (unsigned char)((MED[endpointIndex].ShortAddress >> 8) & 0xFF); 
-    cmd[12] = MED[endpointIndex].ep;    
+    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF); 
+    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF); 
+    cmd[12] = bridge_device[endpointIndex].ep;    
 
     unsigned char checksum = 0;
 
@@ -663,24 +664,18 @@ void Check_Dev_Info()
             for (k = 0; k < ED[i].ep_list[j].clusterCounts; k++) 
             {
                 ChipLogProgress(DeviceLayer, "0x%04X", ED[i].ep_list[j].clusterID[k]);
-                if (ED[i].ep_list[j].clusterID[k] == 0x0006)
+                if (ED[i].ep_list[j].clusterID[k] == OnOff::Attributes::OnOff::Id || 
+                    ED[i].ep_list[j].clusterID[k] == TemperatureMeasurement::Attributes::MeasuredValue::Id)
                 {
-                    MED[device_index].ep = ED[i].ep_list[j].ep;
-                    MED[device_index].ShortAddress = ED[i].ShortAddress;
-                    MED[device_index].endpoint = (EndpointId)i;
-                    MED[device_index].clusterId = 0x0006;
-                    MED[device_index].attributeId = 0;
-                    device_index++;
-                }
-                else if (ED[i].ep_list[j].clusterID[k] == 0x0402)
-                {
-                    MED[device_index].ep = ED[i].ep_list[j].ep;
-                    MED[device_index].ShortAddress = ED[i].ShortAddress;
-                    MED[device_index].endpoint = (EndpointId)i;
-                    MED[device_index].clusterId = 0x0402;
-                    MED[device_index].attributeId = 0;
-                    device_index++;
-                }
+                    struct _MatterEndDevice dev;
+
+                    dev.ep = ED[i].ep_list[j].ep;
+                    dev.ShortAddress = ED[i].ShortAddress;
+                    dev.endpoint = (EndpointId)i;
+                    dev.clusterId = ED[i].ep_list[j].clusterID[k];
+                    dev.attributeId = 0;
+                    bridge_device.insert(std::pair<int, struct _MatterEndDevice>(device_index++, dev));
+                }       
             }
         }
     }
@@ -1308,11 +1303,11 @@ void add_device_thread_handler()
         {
             for (i = 0; i < device_index; i++)
             {
-                if (MED[i].clusterId == 0x0006)
+                if (bridge_device[i].clusterId == OnOff::Attributes::OnOff::Id)
                 {
                     AddLightEP(i);
                 }
-                else if (MED[i].clusterId == 0x0402)
+                else if (bridge_device[i].clusterId == TemperatureMeasurement::Attributes::MeasuredValue::Id)
                 {
                     AddTempSensorEP(i);
                 }
