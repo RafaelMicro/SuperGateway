@@ -23,8 +23,9 @@ define Package/chip-tool/description
 	Matter controller
 	Integrates a router / access point with the Matter IoT ecosystem.
 endef
-
-TARGET_CXXFLAGS += -Wno-format-nonliteral
+TARGET_CFLAGS += -DFATCONFDIR=\"/root\" -DSYSCONFDIR=\"/root\" -DLOCALSTATEDIR=\"/root\"
+TARGET_CXXFLAGS += -DFATCONFDIR=\"/root\" -DSYSCONFDIR=\"/root\" -DLOCALSTATEDIR=\"/root\"
+TARGET_CXXFLAGS += -Wno-format-nonliteral 
 TARGET_CFLAGS += -Wno-format-nonliteral
 
 # The build environment contains host tools that can be shared between targets
