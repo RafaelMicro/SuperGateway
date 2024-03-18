@@ -143,7 +143,7 @@ typedef struct ias_zone_notify
 std::queue<gw_command_t> gw_rx_command_queue;
 std::queue<gw_command_t> gw_tx_command_queue;
 std::queue<gw_command_t> gw_tx_response_queue;
-// std::map<int, struct _MatterEndDevice> bridge_device;
+
 std::vector<_MatterEndDevice_t> bridge_device;
 
 sem_t wait_tx_sem, read_attribute_sem;
@@ -156,7 +156,7 @@ const char EndDevice_Filename[] = "/usr/local/var/lib/ez-zbgw/zbdb/sc_enddevice.
 const char Coordinator_Filename[] = "/usr/local/var/lib/ez-zbgw/zbdb/sc_coordinator.dat";
 
 // int light_id = 0;
-// int device_index = 0;
+int device_index = 0;
 bool add_ep = false;
 int sockfd = 0;
 timer_t *tid;
@@ -164,8 +164,6 @@ timer_t *tid;
 DeviceOnOff *Light[EndDeviceMax];
 DeviceTempSensor *TempSensor[EndDeviceMax];
 DeviceContactSensor *ContactSensor[EndDeviceMax];
-
-
 
 namespace {
 
@@ -311,12 +309,6 @@ static void gw_cmd_read_attr_req(intptr_t arg)
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
 
-    // ChipLogProgress(DeviceLayer, "Matter Endpoint: %x", endpoint);
-    // ChipLogProgress(DeviceLayer, "Matter Cluster: %x", clusterId);
-    // ChipLogProgress(DeviceLayer, "Matter Attribute: %x", attributeId);
-    // ChipLogProgress(DeviceLayer, "Zigbee Address: %x", MED[endpointIndex].ShortAddress);
-    // ChipLogProgress(DeviceLayer, "Zigbee Endpoint: %x", MED[endpointIndex].ep);
-
     unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF,
                            0x0C,
                            0x00, 0x00, 0x02, 0x00,
@@ -326,9 +318,9 @@ static void gw_cmd_read_attr_req(intptr_t arg)
                            0x00, 0x00,
                            0x00};
 
-    cmd[9] = (unsigned char)(bridge_device.at(endpointIndex).ShortAddress & 0xFF);
-    cmd[10] = (unsigned char)((bridge_device.at(endpointIndex).ShortAddress >> 8) & 0xFF);
-    cmd[12] = bridge_device.at(endpointIndex).ep;
+    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    cmd[12] = bridge_device[endpointIndex].ep;
     cmd[13] = (unsigned char)(clusterId & 0xFF);
     cmd[14] = (unsigned char)((clusterId >> 8) & 0xFF);
     cmd[15] = (unsigned char)(attributeId & 0xFF);
@@ -422,9 +414,9 @@ static void gw_cmd_onoff_off_req(intptr_t arg)
 
     unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00};
 
-    cmd[9] = (unsigned char)(bridge_device.at(endpointIndex).ShortAddress & 0xFF);
-    cmd[10] = (unsigned char)((bridge_device.at(endpointIndex).ShortAddress >> 8) & 0xFF);
-    cmd[12] = bridge_device.at(endpointIndex).ep;
+    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    cmd[12] = bridge_device[endpointIndex].ep;
 
     unsigned char checksum = 0;
 
@@ -449,51 +441,6 @@ static void gw_cmd_onoff_off_req(intptr_t arg)
     // sem_wait(&wait_tx_sem);
     gw_tx_command_queue.push(queue);
 }
-
-// static void HandleZigbeeGatewayRequestCallback(intptr_t arg)
-// {
-//     ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-
-//     auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
-
-//     EndpointId endpoint     = path->mEndpointId;
-//     ClusterId clusterId     = path->mClusterId;
-//     AttributeId attributeId = path->mAttributeId;
-//     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
-
-//     ChipLogProgress(DeviceLayer, "Matter Endpoint: %x", endpoint);
-//     ChipLogProgress(DeviceLayer, "Matter Cluster: %x", clusterId);
-//     ChipLogProgress(DeviceLayer, "Matter Attribute: %x", attributeId);
-//     ChipLogProgress(DeviceLayer, "Zigbee Address: %x", MED[endpointIndex].ShortAddress);
-//     ChipLogProgress(DeviceLayer, "Zigbee Endpoint: %x", MED[endpointIndex].ep);
-
-//     switch (clusterId)
-//     {
-//     case OnOff::Id:
-//         ChipLogProgress(DeviceLayer, "Matter OnOff: %s", Light[endpointIndex]->IsOn() ? "On" : "Off");
-//         if (Light[endpointIndex]->IsOn() && Light[endpointIndex]->IsReachable())
-//         {
-//             gw_cmd_onoff_on_req(MED[endpointIndex].ShortAddress, MED[endpointIndex].ep);
-//         }
-//         else
-//         {
-//             gw_cmd_onoff_off_req(MED[endpointIndex].ShortAddress, MED[endpointIndex].ep);
-//         }
-//         break;
-//     case LevelControl::Id:
-//         break;
-//     case ColorControl::Id:
-//         break;
-//     case BridgedDeviceBasicInformation::Id:
-//         if (attributeId == BridgedDeviceBasicInformation::Attributes::Reachable::Id)
-//         {
-//             ChipLogProgress(DeviceLayer, "Matter changed Reachable");
-//         }
-//     default:
-//         break;
-//     }
-//     Platform::Delete(path);
-// }
 
 void MatterReportingAttributeChangeCallback(const ConcreteAttributePath & aPath)
 {
@@ -651,54 +598,6 @@ int AddDeviceEndpoint(Device * dev, EmberAfEndpointType * ep, const Span<const E
     return -1;
 }
 
-void AddContactSensorEP(int contactsensor_number)
-{
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-    std::string node = "ContactSensor " +  std::to_string(contactsensor_number + 1);
-    std::string room = "Office";
-
-    ContactSensor[contactsensor_number] = new DeviceContactSensor(node.c_str(), room);
-    ContactSensor[contactsensor_number]->SetReachable(true);
-    ContactSensor[contactsensor_number]->SetChangeCallback(&HandleDeviceConatactSensorStatusChanged);
-
-    AddDeviceEndpoint(ContactSensor[contactsensor_number], &bridgedContactSensorEndpoint, Span<const EmberAfDeviceType>(gBridgedContactSensorDeviceTypes),
-                      Span<DataVersion>(gContactSensorDataVersions), 1);
-}
-
-void AddTempSensorEP(int tempsensor_number)
-{
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-    std::string node = "TempSensor " +  std::to_string(tempsensor_number + 1);
-    std::string room = "Office";
-
-    TempSensor[tempsensor_number] = new DeviceTempSensor(node.c_str(), room, minMeasuredValue, maxMeasuredValue, initialMeasuredValue);
-    TempSensor[tempsensor_number]->SetReachable(true);
-    TempSensor[tempsensor_number]->SetChangeCallback(&HandleDeviceTempSensorStatusChanged);
-
-    AddDeviceEndpoint(TempSensor[tempsensor_number], &bridgedTempSensorEndpoint, Span<const EmberAfDeviceType>(gBridgedTempSensorDeviceTypes),
-                      Span<DataVersion>(gTempSensorDataVersions), 1);
-}
-
-void AddLightEP(int light_number)
-{
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-    std::string node = "Light " +  std::to_string(light_number + 1);
-    std::string room = "Office";
-
-    Light[light_number] = new DeviceOnOff(node.c_str(), room);
-    Light[light_number]->SetReachable(true);
-    Light[light_number]->SetChangeCallback(&HandleDeviceOnOffStatusChanged);
-
-    AddDeviceEndpoint(Light[light_number], &bridgedLightEndpoint, Span<const EmberAfDeviceType>(gBridgedOnOffDeviceTypes),
-                      Span<DataVersion>(gLightDataVersions), 1);
-};
-
 int FileExist(const char *fname)
 {
     struct stat st;
@@ -743,11 +642,11 @@ void Check_Dev_Info()
 
                     dev.ep = ED[i].ep_list[j].ep;
                     dev.ShortAddress = ED[i].ShortAddress;
-                    dev.endpoint = (EndpointId)(i + gFirstDynamicEndpointId);
+                    dev.endpoint = (EndpointId)(device_index + gFirstDynamicEndpointId);
                     dev.clusterId = ED[i].ep_list[j].clusterID[k];
                     dev.attributeId = 0;
-                    // bridge_device.insert(std::pair<int, struct _MatterEndDevice>(device_index++, dev));
                     bridge_device.push_back(dev);
+                    device_index++;
                 }
             }
         }
@@ -1029,15 +928,6 @@ static void ReleaseSemaphoreHandler(int sig, siginfo_t *si, void *uc)
     free(tidptr);
 }
 
-// void ReleaseSemaphoreHandler(System::Layer * systemLayer, void * appState)
-// {
-//     printf(LIGHT_RED"%s", __FUNCTION__);
-//     printf(NONE"\r\n");
-
-//     sem_post(&wait_tx_sem);
-//     sem_post(&read_attribute_sem);
-// }
-
 EmberAfStatus HandleReadBooleanAttribute(DeviceOnOff * dev,
                                          chip::AttributeId attributeId,
                                          uint8_t * buffer,
@@ -1148,6 +1038,9 @@ EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev,
             printf(NONE"\r\n");
 
             *buffer = resp.buffer[19];
+            // Light[emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId())]->Set(*buffer);
+            // printf(LIGHT_RED"%d", emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId()));
+            // printf(NONE"\r\n");
             Light[emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId())]->Set(*buffer);
             gw_tx_response_queue.pop();
         }
@@ -1393,7 +1286,7 @@ void ApplicationShutdown()
 
 }
  
-#define POLL_INTERVAL_MS (100)
+// #define POLL_INTERVAL_MS (100)
 // uint8_t poll_prescale = 0;
 // const int16_t oneDegree = 100;
 
@@ -1515,18 +1408,40 @@ void add_device_thread_handler(void)
         {
             for (auto dev : bridge_device)
             {
+                int index = dev.endpoint - gFirstDynamicEndpointId;
 
                 if (dev.clusterId == OnOff::Id)
                 {
-                    AddLightEP(dev.endpoint - gFirstDynamicEndpointId);
+                    std::string node = "Light " + std::to_string(index);
+
+                    Light[index] = new DeviceOnOff(node.c_str(), "Office");
+                    Light[index]->SetReachable(true);
+                    Light[index]->SetChangeCallback(&HandleDeviceOnOffStatusChanged);
+
+                    AddDeviceEndpoint(Light[index], &bridgedLightEndpoint, Span<const EmberAfDeviceType>(gBridgedOnOffDeviceTypes),
+                        Span<DataVersion>(gLightDataVersions), 1);
                 }
                 else if (dev.clusterId == TemperatureMeasurement::Id)
                 {
-                    AddTempSensorEP(dev.endpoint - gFirstDynamicEndpointId);
+                    std::string node = "TempSensor " + std::to_string(index);
+
+                    TempSensor[index] = new DeviceTempSensor(node.c_str(), "Office", minMeasuredValue, maxMeasuredValue, initialMeasuredValue);
+                    TempSensor[index]->SetReachable(true);
+                    TempSensor[index]->SetChangeCallback(&HandleDeviceTempSensorStatusChanged);
+
+                    AddDeviceEndpoint(TempSensor[index], &bridgedTempSensorEndpoint, Span<const EmberAfDeviceType>(gBridgedTempSensorDeviceTypes),
+                        Span<DataVersion>(gTempSensorDataVersions), 1);
                 }
                 else if (dev.clusterId == 0x0500)
                 {
-                    AddContactSensorEP(dev.endpoint - gFirstDynamicEndpointId);
+                    std::string node = "ContactSensor " + std::to_string(index);
+
+                    ContactSensor[index] = new DeviceContactSensor(node.c_str(), "Office");
+                    ContactSensor[index]->SetReachable(true);
+                    ContactSensor[index]->SetChangeCallback(&HandleDeviceConatactSensorStatusChanged);
+
+                    AddDeviceEndpoint(ContactSensor[index], &bridgedContactSensorEndpoint, Span<const EmberAfDeviceType>(gBridgedContactSensorDeviceTypes),
+                        Span<DataVersion>(gContactSensorDataVersions), 1);
                 }
             }
             add_ep = false;
@@ -1599,7 +1514,6 @@ int main(int argc, char * argv[])
     // Run CHIP
 
     ApplicationInit();
-    // chip::DeviceLayer::PlatformMgr().ScheduleWork(AddLightEP);
     registerAttributeAccessOverride(&gPowerAttrAccess);
     chip::DeviceLayer::PlatformMgr().AddEventHandler(ChipEventHandler, 0);
     chip::DeviceLayer::PlatformMgr().RunEventLoop();
