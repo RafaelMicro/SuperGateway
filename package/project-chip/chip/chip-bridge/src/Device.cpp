@@ -143,6 +143,38 @@ void DeviceOnOff::HandleDeviceChange(Device * device, Device::Changed_t changeMa
     }
 }
 
+DeviceContactSensor::DeviceContactSensor(const char * szDeviceName, std::string szLocation) : Device(szDeviceName, szLocation)
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    mStatus = false;
+}
+
+bool DeviceContactSensor::IsOpen()
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    return mStatus;
+}
+
+void DeviceContactSensor::Set(bool aStatus)
+{
+    mStatus = aStatus;
+}
+
+void DeviceContactSensor::SetChangeCallback(DeviceCallback_fn aChanged_CB)
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    mChanged_CB = aChanged_CB;
+}
+
+void DeviceContactSensor::HandleDeviceChange(Device * device, Device::Changed_t changeMask)
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    if (mChanged_CB)
+    {
+        mChanged_CB(this, (DeviceContactSensor::Changed_t) changeMask);
+    }
+}
+
 DeviceSwitch::DeviceSwitch(const char * szDeviceName, std::string szLocation, uint32_t aFeatureMap) :
     Device(szDeviceName, szLocation)
 {

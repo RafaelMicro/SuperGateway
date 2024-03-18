@@ -22,6 +22,8 @@
 
 #include <app-common/zap-generated/ids/Attributes.h>
 #include <app-common/zap-generated/ids/Clusters.h>
+#include <app-common/zap-generated/attribute-type.h>
+#include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/ConcreteAttributePath.h>
 #include <app/EventLogging.h>
 #include <app/reporting/reporting.h>
@@ -38,15 +40,17 @@
 #include <setup_payload/QRCodeSetupPayloadGenerator.h>
 #include <setup_payload/SetupPayload.h>
 
-#include <pthread.h>
+// #include <pthread.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <semaphore.h> 
+#include <semaphore.h>
+#include <time.h>
+#include <signal.h>
 #include <thread>
 #include <chrono>
 // #include <semaphore>
-// #include <queue>
-// #include <vector>
+#include <queue>
+#include <vector>
 
 #include "CommissionableInit.h"
 #include "Device.h"
@@ -76,12 +80,12 @@ using namespace chip::app::Clusters;
 #define GREEN            "\033[0;32;32m"
 #define LIGHT_GREEN      "\033[1;32m"
 #define BLUE             "\033[0;32;34m"
-#define LIGHT_BLUE       "\033[1;34m" 
+#define LIGHT_BLUE       "\033[1;34m"
 #define CYAN             "\033[0;36m"
 #define PUPLE            "\033[0;35m"
 #define BRON             "\033[0;33m"
 #define YELLOW           "\033[1;33m"
-#define WHITE            "\033[1;37m" 
+#define WHITE            "\033[1;37m"
 
 #define EndDeviceMax              250
 #define EndPointMax               10
@@ -98,7 +102,7 @@ struct _EndPoint
 struct _EndDevice
 {
     unsigned char  MacAddress[8];   //Mac Address(64bits)
-    unsigned char  Active;	
+    unsigned char  Active;
     unsigned short ShortAddress;    //Short Address(16bits)
     unsigned char ep_counts;
     struct _EndPoint ep_list[EndPointMax];
@@ -114,7 +118,7 @@ struct _Coordinator
     unsigned char  EXT_PAN_ID[8];
 };
 
-struct _MatterEndDevice
+typedef struct _MatterEndDevice
 {
     EndpointId  endpoint;
     ClusterId   clusterId;
@@ -122,20 +126,27 @@ struct _MatterEndDevice
     // _EndDevice  ED;
     unsigned char ep;
     unsigned short ShortAddress;
-};
+} _MatterEndDevice_t;
 
 typedef struct gw_command
-{   
+{
     unsigned char buffer[1024];
     int len;
 } gw_command_t;
 
+typedef struct ias_zone_notify
+{
+    EndpointId endpoint;
+    bool status;
+} ias_zone_notify_t;
+
 std::queue<gw_command_t> gw_rx_command_queue;
 std::queue<gw_command_t> gw_tx_command_queue;
 std::queue<gw_command_t> gw_tx_response_queue;
-std::map<int, struct _MatterEndDevice> bridge_device;
+// std::map<int, struct _MatterEndDevice> bridge_device;
+std::vector<_MatterEndDevice_t> bridge_device;
 
-sem_t wait_tx_sem, read_attribute_sem; 
+sem_t wait_tx_sem, read_attribute_sem;
 
 struct _EndDevice ED[EndDeviceMax];
 struct _Coordinator CR;
@@ -145,14 +156,16 @@ const char EndDevice_Filename[] = "/usr/local/var/lib/ez-zbgw/zbdb/sc_enddevice.
 const char Coordinator_Filename[] = "/usr/local/var/lib/ez-zbgw/zbdb/sc_coordinator.dat";
 
 // int light_id = 0;
-int device_index = 0;
-int light_count = 0;
-int tempsensor_count = 0;
-bool add_ep = true;
+// int device_index = 0;
+bool add_ep = false;
 int sockfd = 0;
+timer_t *tid;
 
 DeviceOnOff *Light[EndDeviceMax];
 DeviceTempSensor *TempSensor[EndDeviceMax];
+DeviceContactSensor *ContactSensor[EndDeviceMax];
+
+
 
 namespace {
 
@@ -172,6 +185,7 @@ const int16_t maxMeasuredValue     = 32766;
 const int16_t initialMeasuredValue = 2100;
 
 #define DEVICE_TYPE_BRIDGED_NODE    0x0013
+#define DEVICE_TYPE_CONTACT_SENSOR  0x0015
 #define DEVICE_TYPE_LO_ON_OFF_LIGHT 0x0100
 #define DEVICE_TYPE_POWER_SOURCE    0x0011
 #define DEVICE_TYPE_TEMP_SENSOR     0x0302
@@ -243,7 +257,7 @@ constexpr CommandId onOffIncomingCommands[] = {
 DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(bridgedLightClusters)
 DECLARE_DYNAMIC_CLUSTER(OnOff::Id, onOffAttrs, onOffIncomingCommands, nullptr),
 DECLARE_DYNAMIC_CLUSTER(Descriptor::Id, descriptorAttrs, nullptr, nullptr),
-DECLARE_DYNAMIC_CLUSTER(BridgedDeviceBasicInformation::Id, bridgedDeviceBasicAttrs, nullptr, nullptr) 
+DECLARE_DYNAMIC_CLUSTER(BridgedDeviceBasicInformation::Id, bridgedDeviceBasicAttrs, nullptr, nullptr)
 DECLARE_DYNAMIC_CLUSTER_LIST_END;
 
 // Declare Bridged Light endpoint
@@ -252,6 +266,32 @@ DataVersion gLightDataVersions[ArraySize(bridgedLightClusters)];
 
 const EmberAfDeviceType gBridgedOnOffDeviceTypes[] = { { DEVICE_TYPE_LO_ON_OFF_LIGHT, DEVICE_VERSION_DEFAULT },
                                                         { DEVICE_TYPE_BRIDGED_NODE, DEVICE_VERSION_DEFAULT } };
+
+
+// ---------------------------------------------------------------------------
+//
+// CONTACT SENSOR ENDPOINT: contains the following clusters:
+//   - Boolean
+//   - Descriptor
+//   - Bridged Device Basic Information
+
+// Declare On/Off cluster attributes
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(booleanAttrs)
+DECLARE_DYNAMIC_ATTRIBUTE(BooleanState::Attributes::StateValue::Id, BOOLEAN, 1, 0),
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(bridgedContactSensorClusters)
+DECLARE_DYNAMIC_CLUSTER(BooleanState::Id, booleanAttrs, nullptr, nullptr),
+DECLARE_DYNAMIC_CLUSTER(Descriptor::Id, descriptorAttrs, nullptr, nullptr),
+DECLARE_DYNAMIC_CLUSTER(BridgedDeviceBasicInformation::Id, bridgedDeviceBasicAttrs, nullptr, nullptr)
+DECLARE_DYNAMIC_CLUSTER_LIST_END;
+
+// Declare Bridged Light endpoint
+DECLARE_DYNAMIC_ENDPOINT(bridgedContactSensorEndpoint, bridgedContactSensorClusters);
+DataVersion gContactSensorDataVersions[ArraySize(bridgedContactSensorClusters)];
+
+const EmberAfDeviceType gBridgedContactSensorDeviceTypes[] = { { DEVICE_TYPE_CONTACT_SENSOR, DEVICE_VERSION_DEFAULT },
+                                                               { DEVICE_TYPE_BRIDGED_NODE, DEVICE_VERSION_DEFAULT } };
 
 namespace {
 
@@ -274,25 +314,25 @@ static void gw_cmd_read_attr_req(intptr_t arg)
     // ChipLogProgress(DeviceLayer, "Matter Endpoint: %x", endpoint);
     // ChipLogProgress(DeviceLayer, "Matter Cluster: %x", clusterId);
     // ChipLogProgress(DeviceLayer, "Matter Attribute: %x", attributeId);
-    // ChipLogProgress(DeviceLayer, "Zigbee Address: %x", MED[endpointIndex].ShortAddress);   
+    // ChipLogProgress(DeviceLayer, "Zigbee Address: %x", MED[endpointIndex].ShortAddress);
     // ChipLogProgress(DeviceLayer, "Zigbee Endpoint: %x", MED[endpointIndex].ep);
 
-    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 
-                           0x0C, 
-                           0x00, 0x00, 0x02, 0x00, 
-                           0x00, 0x00, 
-                           0x00, 0x00, 
-                           0x00, 0x00, 
-                           0x00, 0x00, 
-                           0x00}; 
+    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF,
+                           0x0C,
+                           0x00, 0x00, 0x02, 0x00,
+                           0x00, 0x00,
+                           0x00, 0x00,
+                           0x00, 0x00,
+                           0x00, 0x00,
+                           0x00};
 
-    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF); 
-    cmd[12] = bridge_device[endpointIndex].ep;
+    cmd[9] = (unsigned char)(bridge_device.at(endpointIndex).ShortAddress & 0xFF);
+    cmd[10] = (unsigned char)((bridge_device.at(endpointIndex).ShortAddress >> 8) & 0xFF);
+    cmd[12] = bridge_device.at(endpointIndex).ep;
     cmd[13] = (unsigned char)(clusterId & 0xFF);
-    cmd[14] = (unsigned char)((clusterId >> 8) & 0xFF);  
+    cmd[14] = (unsigned char)((clusterId >> 8) & 0xFF);
     cmd[15] = (unsigned char)(attributeId & 0xFF);
-    cmd[16] = (unsigned char)((attributeId >> 8) & 0xFF);  
+    cmd[16] = (unsigned char)((attributeId >> 8) & 0xFF);
 
     unsigned char checksum = 0;
 
@@ -301,7 +341,7 @@ static void gw_cmd_read_attr_req(intptr_t arg)
         checksum += cmd[4 + 1 + i];
     }
     cmd[sizeof(cmd) - 1] = ~checksum;
-    
+
     printf(LIGHT_RED"send command: ");
     for (unsigned long i = 0; i < sizeof(cmd); i++)
     {
@@ -334,57 +374,11 @@ static void gw_cmd_onoff_on_req(intptr_t arg)
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
 
-    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x01, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00}; 
+    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x01, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00};
 
-    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF); 
-    cmd[12] = bridge_device[endpointIndex].ep;  
-
-    unsigned char checksum = 0;
-
-    for (int i = 0; i < cmd[4]; i++)
-    {
-        checksum += cmd[4 + 1 + i];
-    }
-    cmd[sizeof(cmd) - 1] = ~checksum; 
-  
-    printf(LIGHT_RED"send command: ");
-    for (unsigned long i = 0; i < sizeof(cmd); i++)
-    {
-        printf("%02x ", cmd[i]);
-    }
-    printf(NONE"\r\n");
-
-    gw_command_t queue;
-
-    queue.len = sizeof(cmd);
-    memcpy(queue.buffer, cmd, queue.len);
-
-    // sem_wait(&wait_tx_sem);
-    gw_tx_command_queue.push(queue); 
-}
-
-static void gw_cmd_onoff_off_req(intptr_t arg)
-{
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-
-    auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
-
-    EndpointId endpoint     = path->mEndpointId;
-    // ClusterId clusterId     = path->mClusterId;
-    // AttributeId attributeId = path->mAttributeId;
-
-    Platform::Delete(path);
-
-    uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
-
-    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00}; 
-
-    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF); 
-    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF); 
-    cmd[12] = bridge_device[endpointIndex].ep;    
+    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    cmd[12] = bridge_device[endpointIndex].ep;
 
     unsigned char checksum = 0;
 
@@ -407,7 +401,53 @@ static void gw_cmd_onoff_off_req(intptr_t arg)
     memcpy(queue.buffer, cmd, queue.len);
 
     // sem_wait(&wait_tx_sem);
-    gw_tx_command_queue.push(queue);  
+    gw_tx_command_queue.push(queue);
+}
+
+static void gw_cmd_onoff_off_req(intptr_t arg)
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    printf(LIGHT_RED"%s", __FUNCTION__);
+    printf(NONE"\r\n");
+
+    auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
+
+    EndpointId endpoint     = path->mEndpointId;
+    // ClusterId clusterId     = path->mClusterId;
+    // AttributeId attributeId = path->mAttributeId;
+
+    Platform::Delete(path);
+
+    uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
+
+    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00};
+
+    cmd[9] = (unsigned char)(bridge_device.at(endpointIndex).ShortAddress & 0xFF);
+    cmd[10] = (unsigned char)((bridge_device.at(endpointIndex).ShortAddress >> 8) & 0xFF);
+    cmd[12] = bridge_device.at(endpointIndex).ep;
+
+    unsigned char checksum = 0;
+
+    for (int i = 0; i < cmd[4]; i++)
+    {
+        checksum += cmd[4 + 1 + i];
+    }
+    cmd[sizeof(cmd) - 1] = ~checksum;
+
+    printf(LIGHT_RED"send command: ");
+    for (unsigned long i = 0; i < sizeof(cmd); i++)
+    {
+        printf("%02x ", cmd[i]);
+    }
+    printf(NONE"\r\n");
+
+    gw_command_t queue;
+
+    queue.len = sizeof(cmd);
+    memcpy(queue.buffer, cmd, queue.len);
+
+    // sem_wait(&wait_tx_sem);
+    gw_tx_command_queue.push(queue);
 }
 
 // static void HandleZigbeeGatewayRequestCallback(intptr_t arg)
@@ -424,7 +464,7 @@ static void gw_cmd_onoff_off_req(intptr_t arg)
 //     ChipLogProgress(DeviceLayer, "Matter Endpoint: %x", endpoint);
 //     ChipLogProgress(DeviceLayer, "Matter Cluster: %x", clusterId);
 //     ChipLogProgress(DeviceLayer, "Matter Attribute: %x", attributeId);
-//     ChipLogProgress(DeviceLayer, "Zigbee Address: %x", MED[endpointIndex].ShortAddress);   
+//     ChipLogProgress(DeviceLayer, "Zigbee Address: %x", MED[endpointIndex].ShortAddress);
 //     ChipLogProgress(DeviceLayer, "Zigbee Endpoint: %x", MED[endpointIndex].ep);
 
 //     switch (clusterId)
@@ -492,13 +532,13 @@ void HandleDeviceStatusChanged(Device * dev, Device::Changed_t itemChangedMask)
     // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
-    if (itemChangedMask & Device::kChanged_Reachable) 
-    { 
-        ScheduleReportingCallback(dev, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::Reachable::Id); 
+    if (itemChangedMask & Device::kChanged_Reachable)
+    {
+        ScheduleReportingCallback(dev, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::Reachable::Id);
     }
-    if (itemChangedMask & Device::kChanged_Name) 
-    { 
-        ScheduleReportingCallback(dev, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id); 
+    if (itemChangedMask & Device::kChanged_Name)
+    {
+        ScheduleReportingCallback(dev, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id);
     }
 }
 
@@ -531,9 +571,24 @@ void HandleDeviceOnOffStatusChanged(DeviceOnOff * dev, DeviceOnOff::Changed_t it
         {
             gw_cmd_onoff_off_req(reinterpret_cast<intptr_t>(path));
         }
-        printf(LIGHT_RED"recv done");
         printf(NONE"\r\n");
     }
+}
+
+void HandleDeviceConatactSensorStatusChanged(DeviceContactSensor * dev, DeviceContactSensor::Changed_t itemChangedMask)
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    printf(LIGHT_RED"%s", __FUNCTION__);
+    printf(NONE"\r\n");
+    // if (itemChangedMask &
+    //     (DeviceTempSensor::kChanged_Reachable | DeviceTempSensor::kChanged_Name | DeviceTempSensor::kChanged_Location))
+    // {
+    //     HandleDeviceStatusChanged(static_cast<Device *>(dev), (Device::Changed_t) itemChangedMask);
+    // }
+    // if (itemChangedMask & DeviceTempSensor::kChanged_MeasurementValue)
+    // {
+    //     ScheduleReportingCallback(dev, TemperatureMeasurement::Id, TemperatureMeasurement::Attributes::MeasuredValue::Id);
+    // }
 }
 
 void HandleDeviceTempSensorStatusChanged(DeviceTempSensor * dev, DeviceTempSensor::Changed_t itemChangedMask)
@@ -596,6 +651,22 @@ int AddDeviceEndpoint(Device * dev, EmberAfEndpointType * ep, const Span<const E
     return -1;
 }
 
+void AddContactSensorEP(int contactsensor_number)
+{
+    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    printf(LIGHT_RED"%s", __FUNCTION__);
+    printf(NONE"\r\n");
+    std::string node = "ContactSensor " +  std::to_string(contactsensor_number + 1);
+    std::string room = "Office";
+
+    ContactSensor[contactsensor_number] = new DeviceContactSensor(node.c_str(), room);
+    ContactSensor[contactsensor_number]->SetReachable(true);
+    ContactSensor[contactsensor_number]->SetChangeCallback(&HandleDeviceConatactSensorStatusChanged);
+
+    AddDeviceEndpoint(ContactSensor[contactsensor_number], &bridgedContactSensorEndpoint, Span<const EmberAfDeviceType>(gBridgedContactSensorDeviceTypes),
+                      Span<DataVersion>(gContactSensorDataVersions), 1);
+}
+
 void AddTempSensorEP(int tempsensor_number)
 {
     // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
@@ -638,21 +709,21 @@ void Check_Dev_Info()
 {
     int i, j, k;
 
-    for (i = 0; i < EndDeviceMax; i++) 
+    for (i = 0; i < EndDeviceMax; i++)
     {
         if (ED[i].Active == 0)
             continue;
         printf(LIGHT_RED"%s", __FUNCTION__);
         printf(NONE"\r\n");
         ChipLogProgress(DeviceLayer, "Device %d", i);
-        ChipLogProgress(DeviceLayer, "MAC Address: %02X%02X%02X%02X%02X%02X%02X%02X", 
-            ED[i].MacAddress[0], 
-            ED[i].MacAddress[1], 
-            ED[i].MacAddress[2], 
-            ED[i].MacAddress[3], 
-            ED[i].MacAddress[4], 
-            ED[i].MacAddress[5], 
-            ED[i].MacAddress[6], 
+        ChipLogProgress(DeviceLayer, "MAC Address: %02X%02X%02X%02X%02X%02X%02X%02X",
+            ED[i].MacAddress[0],
+            ED[i].MacAddress[1],
+            ED[i].MacAddress[2],
+            ED[i].MacAddress[3],
+            ED[i].MacAddress[4],
+            ED[i].MacAddress[5],
+            ED[i].MacAddress[6],
             ED[i].MacAddress[7]);
         ChipLogProgress(DeviceLayer, "Short Addr: %04X", ED[i].ShortAddress);
         for (j = 0; j < ED[i].ep_counts; j++)
@@ -661,24 +732,29 @@ void Check_Dev_Info()
             ChipLogProgress(DeviceLayer, "Endpoint: %d", ED[i].ep_list[j].ep);
             ChipLogProgress(DeviceLayer, "Device Id: %d", ED[i].ep_list[j].devidId);
             ChipLogProgress(DeviceLayer, "Cluster Id");
-            for (k = 0; k < ED[i].ep_list[j].clusterCounts; k++) 
+            for (k = 0; k < ED[i].ep_list[j].clusterCounts; k++)
             {
                 ChipLogProgress(DeviceLayer, "0x%04X", ED[i].ep_list[j].clusterID[k]);
-                if (ED[i].ep_list[j].clusterID[k] == OnOff::Attributes::OnOff::Id || 
-                    ED[i].ep_list[j].clusterID[k] == TemperatureMeasurement::Attributes::MeasuredValue::Id)
+                if (ED[i].ep_list[j].clusterID[k] == OnOff::Id ||
+                    ED[i].ep_list[j].clusterID[k] == TemperatureMeasurement::Id ||
+                    ED[i].ep_list[j].clusterID[k] == 0x0500)
                 {
                     struct _MatterEndDevice dev;
 
                     dev.ep = ED[i].ep_list[j].ep;
                     dev.ShortAddress = ED[i].ShortAddress;
-                    dev.endpoint = (EndpointId)i;
+                    dev.endpoint = (EndpointId)(i + gFirstDynamicEndpointId);
                     dev.clusterId = ED[i].ep_list[j].clusterID[k];
                     dev.attributeId = 0;
-                    bridge_device.insert(std::pair<int, struct _MatterEndDevice>(device_index++, dev));
-                }       
+                    // bridge_device.insert(std::pair<int, struct _MatterEndDevice>(device_index++, dev));
+                    bridge_device.push_back(dev);
+                }
             }
         }
     }
+    
+    printf(LIGHT_RED"Zigbee devices: %ld", bridge_device.size());
+    printf(NONE"\r\n");
 }
 
 void Clear_EndDevice_Information()
@@ -688,10 +764,10 @@ void Clear_EndDevice_Information()
     for (i = 0; i < EndDeviceMax; i++)
     {
         //----------------------------
-        memset(ED[i].MacAddress,0x00,8);  
-        //----------------------------   
-        ED[i].ShortAddress=0;    
-        ED[i].Active=0;         
+        memset(ED[i].MacAddress,0x00,8);
+        //----------------------------
+        ED[i].ShortAddress=0;
+        ED[i].Active=0;
         ED[i].ep_counts=0;
 
         for(j=0;j<EndPointMax;j++)
@@ -699,20 +775,20 @@ void Clear_EndDevice_Information()
     }
 }
 
-void Read_EndDevice_File() 
-{      
+void Read_EndDevice_File()
+{
     FILE    *fp;
     // int     i;
     size_t  rsize;
     //----------------------------------------------------------
     // printf(GREEN"Get coordinator register endpoint device form file !\n"NONE);
-    //----------------------------------------------------------   
+    //----------------------------------------------------------
     CR.DevCount=0;
     //----------------------------------------------------------
     Clear_EndDevice_Information();
     //--------------------------------------------------------
     if (FileExist(EndDevice_Filename))
-    {                
+    {
        fp = fopen(EndDevice_Filename,"rb");
        if (fp != NULL)
        {
@@ -720,15 +796,15 @@ void Read_EndDevice_File()
            {
               rsize = fread(&ED[CR.DevCount].MacAddress[0],sizeof(struct _EndDevice),1,fp);
               if (rsize != 1)
-                break;              
+                break;
               //-------------------------------------------------------------------------
               CR.DevCount++;
-           } 
+           }
            //----------------------------------------------------------------------------
            fclose(fp);
        }
-       else    
-       {   
+       else
+       {
         //   printf(LIGHT_RED"EndPoint_Filename Open Failure !\n"NONE);
        }
     }
@@ -743,7 +819,7 @@ void Open_Socket()
 {
     sockfd = socket(AF_INET, SOCK_STREAM , 0);
 
-    if (sockfd == -1) 
+    if (sockfd == -1)
     {
         ChipLogProgress(DeviceLayer, "Fail to create a socket.");
     }
@@ -756,10 +832,10 @@ void Open_Socket()
     info.sin_port = htons(10010);
 
     int err = connect(sockfd,(struct sockaddr *)&info, sizeof(info));
-    if (err == -1) 
+    if (err == -1)
     {
         ChipLogProgress(DeviceLayer, "Connection error");
-    }      
+    }
 }
 
 // void Close_Socket()
@@ -937,9 +1013,76 @@ EmberAfStatus HandleReadBridgedDeviceBasicAttribute(Device * dev, chip::Attribut
     return EMBER_ZCL_STATUS_SUCCESS;
 }
 
-EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev, 
-                                       chip::AttributeId attributeId, 
-                                       uint8_t * buffer, 
+static void ReleaseSemaphoreHandler(int sig, siginfo_t *si, void *uc)
+{
+    printf(LIGHT_RED"%s", __FUNCTION__);
+    printf(NONE"\r\n");
+
+    timer_t *tidptr;
+
+    sem_post(&wait_tx_sem);
+    sem_post(&read_attribute_sem);
+
+    tidptr = (timer_t *)si->si_value.sival_ptr;
+    timer_delete(*tidptr);
+
+    free(tidptr);
+}
+
+// void ReleaseSemaphoreHandler(System::Layer * systemLayer, void * appState)
+// {
+//     printf(LIGHT_RED"%s", __FUNCTION__);
+//     printf(NONE"\r\n");
+
+//     sem_post(&wait_tx_sem);
+//     sem_post(&read_attribute_sem);
+// }
+
+EmberAfStatus HandleReadBooleanAttribute(DeviceOnOff * dev,
+                                         chip::AttributeId attributeId,
+                                         uint8_t * buffer,
+                                         uint16_t maxReadLength)
+{
+    printf(LIGHT_RED"%s", __FUNCTION__);
+    printf(NONE"\r\n");
+    ChipLogProgress(DeviceLayer, "HandleReadBooleanAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
+
+    uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId());
+
+    if (attributeId == BooleanState::Attributes::StateValue::Id)
+    {
+        *buffer = ContactSensor[endpointIndex]->IsOpen();
+    }
+    return EMBER_ZCL_STATUS_SUCCESS;
+}
+
+EmberAfStatus HandleWriteBooleanAttribute(DeviceOnOff * dev, chip::AttributeId attributeId, uint8_t * buffer)
+{
+    printf(LIGHT_RED"%s", __FUNCTION__);
+    printf(NONE"\r\n");
+    ChipLogProgress(DeviceLayer, "HandleWriteOnOffAttribute: attrId=%d", attributeId);
+
+    uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId());
+
+    if ((attributeId == BooleanState::Attributes::StateValue::Id) && (dev->IsReachable()))
+    {
+        ContactSensor[endpointIndex]->Set(*buffer);
+
+        printf(LIGHT_RED"status: %s", *buffer ? "Close" : "Open");
+        printf(NONE"\r\n");
+        
+    }
+    else
+    {
+        return EMBER_ZCL_STATUS_FAILURE;
+    }
+
+    return EMBER_ZCL_STATUS_SUCCESS;
+}
+
+EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev,
+                                       chip::AttributeId attributeId,
+                                       uint8_t * buffer,
                                        uint16_t maxReadLength)
 {
     // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
@@ -950,13 +1093,49 @@ EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev,
     if ((attributeId == OnOff::Attributes::OnOff::Id) && (maxReadLength == 1))
     {
         // *buffer = dev->IsOn() ? 1 : 0;
-        
-        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), 
-                                                                OnOff::Id, 
+
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(),
+                                                                OnOff::Id,
                                                                 OnOff::Attributes::OnOff::Id);
-        // PlatformMgr().ScheduleWork(gw_cmd_read_attr_req, reinterpret_cast<intptr_t>(path));
         sem_wait(&wait_tx_sem);
         gw_cmd_read_attr_req(reinterpret_cast<intptr_t>(path));
+        
+        struct sigevent sev;
+        struct sigaction sa;
+
+        memset(&sev, 0, sizeof(struct sigevent));
+
+        tid = (timer_t *)malloc(sizeof(timer_t));
+
+        sa.sa_flags = SA_SIGINFO;
+        sa.sa_sigaction = ReleaseSemaphoreHandler;
+        sigemptyset(&sa.sa_mask);
+
+        if (sigaction(SIGRTMAX, &sa, NULL) == -1)
+        {
+            return EMBER_ZCL_STATUS_FAILURE;
+        }
+
+        sev.sigev_notify = SIGEV_SIGNAL;
+        sev.sigev_signo = SIGRTMAX;
+        sev.sigev_value.sival_ptr = tid;
+
+        if (timer_create(CLOCK_REALTIME, &sev, tid) == -1)
+        {
+            return EMBER_ZCL_STATUS_FAILURE;
+        }
+
+        struct itimerspec it;
+        it.it_interval.tv_sec = 1;
+        it.it_interval.tv_nsec = 0;
+        it.it_value.tv_sec = 3;
+        it.it_value.tv_nsec = 0;
+
+        if (timer_settime(*tid, 0, &it, NULL) == -1)
+        {
+            return EMBER_ZCL_STATUS_FAILURE;
+        }
+
         sem_wait(&read_attribute_sem);
         printf(LIGHT_RED"recv done");
         printf(NONE"\r\n");
@@ -965,7 +1144,7 @@ EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev,
         {
             gw_command_t resp = gw_tx_response_queue.front();
 
-            printf(LIGHT_RED"Status: %d", resp.buffer[19]);
+            printf(LIGHT_RED"status: %d", resp.buffer[19]);
             printf(NONE"\r\n");
 
             *buffer = resp.buffer[19];
@@ -1087,6 +1266,11 @@ EmberAfStatus emberAfExternalAttributeReadCallback(EndpointId endpoint, ClusterI
             ret = HandleReadTempMeasurementAttribute(static_cast<DeviceTempSensor *>(dev), attributeMetadata->attributeId, buffer,
                                                      maxReadLength);
         }
+        else if (clusterId == BooleanState::Id)
+        {
+            ret = HandleReadBooleanAttribute(static_cast<DeviceOnOff *>(dev), attributeMetadata->attributeId, buffer,
+                                                     maxReadLength);
+        }
     }
 
     return ret;
@@ -1175,6 +1359,10 @@ EmberAfStatus emberAfExternalAttributeWriteCallback(EndpointId endpoint, Cluster
         {
             ret = HandleWriteOnOffAttribute(static_cast<DeviceOnOff *>(dev), attributeMetadata->attributeId, buffer);
         }
+        else if ((dev->IsReachable()) && (clusterId == BooleanState::Id))
+        {
+            ret = HandleWriteBooleanAttribute(static_cast<DeviceOnOff *>(dev), attributeMetadata->attributeId, buffer);
+        }
     }
 
     return ret;
@@ -1190,26 +1378,36 @@ bool emberAfActionsClusterInstantActionCallback(app::CommandHandler * commandObj
     return true;
 }
 
-void ApplicationInit() 
+void ApplicationInit()
 {
     Read_EndDevice_File();
     Check_Dev_Info();
     Open_Socket();
-    sem_init(&wait_tx_sem, 0, 1); 
+    sem_init(&wait_tx_sem, 0, 1);
     sem_init(&read_attribute_sem, 0, 0);
     add_ep = true;
 }
 
-void ApplicationShutdown() 
+void ApplicationShutdown()
 {
 
 }
-
+ 
 #define POLL_INTERVAL_MS (100)
 // uint8_t poll_prescale = 0;
 // const int16_t oneDegree = 100;
 
-void rx_queue_process_handler()
+void UpdateClusterStateInternal(intptr_t arg)
+{
+    ias_zone_notify_t *resp = reinterpret_cast<ias_zone_notify_t *>(arg);
+
+    printf(LIGHT_RED"endpoint: %02x, ", resp->endpoint);
+    printf(LIGHT_RED"status: %s", resp->status ? "True" : "False");
+    printf(NONE"\r\n");
+    app::Clusters::BooleanState::Attributes::StateValue::Set(resp->endpoint, !resp->status);
+}
+
+void rx_queue_process_handler(void)
 {
     unsigned int commandId;
     gw_command_t queue;
@@ -1217,12 +1415,12 @@ void rx_queue_process_handler()
     using namespace std::chrono_literals;
 
     while (true)
-    {   
+    {
         if (!gw_rx_command_queue.empty())
         {
             queue = gw_rx_command_queue.front();
 
-            commandId = (queue.buffer[5] << 0)   | 
+            commandId = (queue.buffer[5] << 0)   |
                         (queue.buffer[6] << 8)   |
                         (queue.buffer[7] << 16)  |
                         (queue.buffer[8] << 24);
@@ -1230,7 +1428,7 @@ void rx_queue_process_handler()
             printf(LIGHT_RED"recv command: ");
             for (int i = 0; i < queue.len; i++)
             {
-                printf("%02x ", queue.buffer[i]); 
+                printf("%02x ", queue.buffer[i]);
             }
             printf(NONE"\r\n");
 
@@ -1240,12 +1438,27 @@ void rx_queue_process_handler()
                     unsigned short temperature;
 
                     temperature = queue.buffer[16] | queue.buffer[17] << 8;
-                    TempSensor[0]->SetMeasuredValue(temperature);
+                    // TempSensor[0]->SetMeasuredValue(temperature);
                     ChipLogProgress(DeviceLayer, "Temp: %f", (float)temperature / 100.0);
                     break;
-            
+
                 case 0x00230000:
                     ChipLogProgress(DeviceLayer, "IAS");
+                    unsigned short shortaddr;
+                    ias_zone_notify_t resp;
+
+                    shortaddr = queue.buffer[9] | queue.buffer[10] << 8;
+
+                    for (auto dev : bridge_device)
+                    {
+                        if (dev.ShortAddress == shortaddr)
+                        {
+                            resp.endpoint = dev.endpoint;
+                            resp.status = queue.buffer[13] ? true : false;
+                        }
+                    }
+
+                    PlatformMgr().ScheduleWork(UpdateClusterStateInternal, reinterpret_cast<intptr_t>(&resp));
                     break;
 
                 case 0x00018800:
@@ -1258,7 +1471,8 @@ void rx_queue_process_handler()
                     gw_tx_response_queue.push(queue);
                     sem_post(&wait_tx_sem);
                     sem_post(&read_attribute_sem);
-                default: 
+                    timer_delete(*tid);
+                default:
                     break;
             }
             gw_rx_command_queue.pop();
@@ -1269,14 +1483,14 @@ void rx_queue_process_handler()
     }
 }
 
-void tx_queue_process_handler()
+void tx_queue_process_handler(void)
 {
     gw_command_t queue;
 
     using namespace std::chrono_literals;
 
     while (true)
-    {   
+    {
         if (!gw_tx_command_queue.empty())
         {
             queue = gw_tx_command_queue.front();
@@ -1291,35 +1505,39 @@ void tx_queue_process_handler()
     }
 }
 
-void add_device_thread_handler()
-{   
-    int i = 0;
-
+void add_device_thread_handler(void)
+{
     using namespace std::chrono_literals;
 
     while (true)
     {
         if (add_ep)
         {
-            for (i = 0; i < device_index; i++)
+            for (auto dev : bridge_device)
             {
-                if (bridge_device[i].clusterId == OnOff::Attributes::OnOff::Id)
+
+                if (dev.clusterId == OnOff::Id)
                 {
-                    AddLightEP(i);
+                    AddLightEP(dev.endpoint - gFirstDynamicEndpointId);
                 }
-                else if (bridge_device[i].clusterId == TemperatureMeasurement::Attributes::MeasuredValue::Id)
+                else if (dev.clusterId == TemperatureMeasurement::Id)
                 {
-                    AddTempSensorEP(i);
+                    AddTempSensorEP(dev.endpoint - gFirstDynamicEndpointId);
+                }
+                else if (dev.clusterId == 0x0500)
+                {
+                    AddContactSensorEP(dev.endpoint - gFirstDynamicEndpointId);
                 }
             }
             add_ep = false;
         }
+
         std::this_thread::sleep_for(10ms);
         std::this_thread::yield();
     }
 }
 
-void tcp_rx_thread_hanlder()
+void tcp_rx_thread_hanlder(void)
 {
     unsigned char buffer[1024];
     gw_command_t queue;
@@ -1374,7 +1592,6 @@ int main(int argc, char * argv[])
     emberAfEndpointEnableDisable(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1)), false);
 
     std::thread add_device_thread(add_device_thread_handler);
-    // add_device_thread.join();
     std::thread tcp_rx_thread(tcp_rx_thread_hanlder);
     std::thread rx_queue_process_thread(rx_queue_process_handler);
     std::thread tx_queue_process_thread(tx_queue_process_handler);

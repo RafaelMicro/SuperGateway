@@ -94,6 +94,30 @@ private:
     DeviceCallback_fn mChanged_CB;
 };
 
+class DeviceContactSensor : public Device
+{
+public:
+    enum Changed_t
+    {
+        kChanged_OnOff = kChanged_Last << 1,
+    } Changed;
+
+    DeviceContactSensor(const char * szDeviceName, std::string szLocation);
+    virtual ~DeviceContactSensor() {}
+    bool IsOpen();
+    void Set(bool aStatus);
+
+    using DeviceCallback_fn = std::function<void(DeviceContactSensor *, DeviceContactSensor::Changed_t)>;
+    void SetChangeCallback(DeviceCallback_fn aChanged_CB);
+
+private:
+    void HandleDeviceChange(Device * device, Device::Changed_t changeMask);
+
+private:
+    bool mStatus;
+    DeviceCallback_fn mChanged_CB;
+};
+
 class DeviceSwitch : public Device
 {
 public:
