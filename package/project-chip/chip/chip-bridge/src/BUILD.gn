@@ -19,13 +19,24 @@ import("${chip_root}/build/chip/tools.gni")
 assert(chip_build_tools)
 
 executable("chip-bridge-app") {
+  cflags = [ "-Wconversion" ]
+  include_dirs = [ ".", "bridge/include" ]
   sources = [
     "${chip_root}/examples/tv-app/tv-common/include/CHIPProjectAppConfig.h",
-    "Device.cpp",
-    # "include/Device.h",
-    "include/main.h",
-    "bridged-actions-stub.cpp",
     "main.cpp",
+    "bridge/ApplicationCluster.cpp",
+    "bridge/bridged-actions-stub.cpp",
+    "bridge/DeviceLibrary.cpp",
+    "bridge/SingletonBridgedManager.cpp",
+    "bridge/ClusterBase.cpp",
+    "bridge/BridgedInit.cpp",
+  ]
+
+  sources += [
+    "bridged_platfrom/Device.cpp",
+    "bridged_platfrom/Device.h",
+    "bridged_platfrom/ExampleBridgedImp.cpp",
+    "bridged_platfrom/ExampleBridgedImp.h",
   ]
 
   deps = [
@@ -33,10 +44,6 @@ executable("chip-bridge-app") {
     "${chip_root}/examples/platform/linux:app-main",
     "${chip_root}/src/lib",
   ]
-
-  cflags = [ "-Wconversion" ]
-
-  include_dirs = [ "include" ]
 
   output_dir = root_out_dir
 }
