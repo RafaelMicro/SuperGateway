@@ -1347,7 +1347,7 @@ void rx_queue_process_handler(void)
                         if (dev.ShortAddress == shortaddr)
                         {
                             resp.endpoint = dev.endpoint;
-                            resp.status = queue.buffer[13] ? true : false;
+                            resp.status = (queue.buffer[13] & 0x1) ? true : false;
                         }
                     }
 
