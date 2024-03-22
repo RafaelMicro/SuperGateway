@@ -126,6 +126,5 @@
         "/cdrom": true,
         "/dev": true,
         "/build":true,
-        "/third_party":true,
     }
 }
