@@ -1,0 +1,100 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "[Setting] Manage configuration",
+            "command": "cd ${workspaceFolder}/openwrt && make menuconfig",
+            "type": "shell",
+            "group": "none",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "[Build] all Image",
+            "command": "cd ${workspaceFolder}/openwrt && make -j8 V=s",
+            "type": "shell",
+            "group": "none",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "[Build] single Image",
+            "command": "cd ${workspaceFolder}/openwrt && make package/${input:package_name}/compile -j8 V=s ",
+            "type": "shell",
+            "group": "none",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "sent Package to remote",
+            "command": "scp -O ${workspaceFolder}/openwrt/staging_dir/packages/bcm27xx/${input:package_name}_${input:package_version}_aarch64_cortex-a72.ipk root@${input:remote_ip}:/tmp",
+            "type": "shell",
+            "group": "none",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "remove remote Package",
+            "command": "ssh root@${input:remote_ip} opkg remove ${input:package_name}",
+            "type": "shell",
+            "group": "none",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "install remotell Package",
+            "command": "ssh root@${input:remote_ip} opkg install /tmp/${input:package_name}_${input:package_version}_aarch64_cortex-a72.ipk",
+            "type": "shell",
+            "group": "none",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "remove remote Package file",
+            "command": "ssh root@${input:remote_ip} rm /tmp/${input:package_name}_${input:package_version}_aarch64_cortex-a72.ipk",
+            "type": "shell",
+            "group": "none",
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "[Install] reinstall Remote Package",
+            "type": "shell",
+            "command": "echo '============ END ============'",
+            "dependsOrder": "sequence",
+            "group": "build",
+            "dependsOn": [
+                "sent Package to remote",
+                "remove remote Package",
+                "install remotell Package",
+                "remove remote Package file",
+            ]
+        },
+    ],
+    "inputs": [
+        {
+            "type": "pickString",
+            "id": "package_name",
+            "description": "Input package name",
+            "options": [
+                "chip-bridge",
+            ],
+            "default": ""
+        },
+        {
+            "type": "promptString",
+            "id": "remote_ip",
+            "description": "Remote IP address",
+            "default": ""
+        },
+        {
+            "type": "pickString",
+            "id": "package_version",
+            "description": "Input package version",
+            "options": [
+                "1",
+            ],
+            "default": ""
+        },
+    ],
+}
