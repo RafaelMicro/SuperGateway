@@ -48,21 +48,11 @@ chip::EndpointId DeviceManager::gCurrentEndpointId;
 DeviceManager & DeviceMgr(void) { return DeviceManager::sDeviceManager; }
 
 deviceEP_t* DeviceManager::GetDeviceList(uint16_t idx) {
-    ChipLogProgress(DeviceLayer, "%s", __func__);
-    ChipLogProgress(DeviceLayer, "++++++++++++++++ target %d", idx);
-    for (auto ep : epList) {
-        ChipLogProgress(DeviceLayer, "Id: %d, Id_index: %d",  ep->endpointId, ep->endpointIndex);
-        if(ep->endpointIndex == idx) { 
-            ChipLogProgress(DeviceLayer, "Match");
-            return ep;
-        }
-    }
-    ChipLogProgress(DeviceLayer, "++++++++++++++++");
+    for (auto ep : epList)  if(ep->endpointId == idx) return ep;
     return nullptr;
 }
 
 void DeviceManager::AddDeviceList(deviceEP_t * dev) { 
-    ChipLogProgress(DeviceLayer, "%s", __func__);
     if(epList.size() > CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT)
     {
         ChipLogProgress(DeviceLayer, "Fully epList, Dynamic EP count: %d",
@@ -70,17 +60,11 @@ void DeviceManager::AddDeviceList(deviceEP_t * dev) {
         return ;
     } 
     epList.push_back(dev);
-    ChipLogProgress(DeviceLayer, "----------- %p", &epList);
-    for (auto ep : epList) {
-        ChipLogProgress(DeviceLayer, "Id: %d, Id_index: %d",  ep->endpointId, ep->endpointIndex);
-    }
-    ChipLogProgress(DeviceLayer, "-----------");
 };
 
 void DeviceManager::DelDeviceList(uint16_t idx) { 
-    ChipLogProgress(DeviceLayer, "%s", __func__);
     for(uint16_t i = 0; i < epList.size(); i++) {
-        if(epList[i]->endpointIndex == idx) {
+        if(epList[i]->endpointId == idx) {
             delete epList[i];
             epList.erase(std::next(epList.begin(), i));
         }

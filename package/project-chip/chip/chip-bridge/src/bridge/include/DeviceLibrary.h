@@ -51,7 +51,7 @@ public:
     template <typename T>
     static device_t<T>* GetDevice(uint16_t idx) {
         for(uint16_t i = 0; i < devList<T>.size(); i++) { 
-            if(devList<T>[i]->endpointIndex == idx) { return devList<T>[i]; } 
+            if(devList<T>[i]->endpointId == idx) { return devList<T>[i]; } 
         }
         return nullptr; 
     };
@@ -65,12 +65,12 @@ public:
         devList<T>.push_back(dev);
     };
     template <typename T>
-    static void DelDevice(uint16_t epIndex) {
+    static void DelDevice(uint16_t idx) {
         ChipLogProgress(DeviceLayer, "%s", __func__);
         for(uint16_t i = 0; i < epList.size(); i++) {
-            if(epList[i]->endpointIndex == epIndex) {
-                free(devList<T>[epIndex]);
-                devList<T>.erase(std::next(devList<T>.begin(), epIndex));
+            if(epList[i]->endpointId == idx) {
+                free(devList<T>[idx]);
+                devList<T>.erase(std::next(devList<T>.begin(), idx));
             }
         }
 
@@ -83,7 +83,7 @@ public:
     template <class T>
     static void DelDeviceEndpoint(uint16_t idx) {
         if (GetDeviceList(idx) == nullptr)  { 
-            ChipLogProgress(DeviceLayer, "Endpoint Index not found");
+            ChipLogProgress(DeviceLayer, "Endpoint Id not found");
             return;
         }
         chip::DeviceLayer::StackLock lock;
@@ -100,7 +100,7 @@ public:
         auto dev = epDevice->device;
         EmberAfStatus ret;
         ChipLogProgress(DeviceLayer, "Gen device EP_Id:%d, Device_Type:%d\n", gCurrentEndpointId, epType->deviceType);
-        for(uint8_t index = 0; index < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT; index++)
+        for(uint8_t index = 0; index <= gCurrentEndpointId + 1; index++)
         {
             if (GetDeviceList(index) != nullptr)  { continue; }
             chip::DeviceLayer::StackLock lock;

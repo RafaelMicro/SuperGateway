@@ -51,7 +51,7 @@ EmberAfStatus emberAfExternalAttributeReadCallback(EndpointId endpoint, ClusterI
 {
     uint16_t endpointIndex = emberAfGetDynamicIndexFromEndpoint(endpoint);
     if (endpointIndex >= CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT) { return EMBER_ZCL_STATUS_FAILURE; }
-    if (Rafael::DeviceLibrary::DeviceMgr().GetDeviceList(endpointIndex) == nullptr) { return EMBER_ZCL_STATUS_FAILURE; }
+    if (Rafael::DeviceLibrary::DeviceMgr().GetDeviceList(endpoint) == nullptr) { return EMBER_ZCL_STATUS_FAILURE; }
     return RafaelCluster::BridgedMgr().BridgedHandleReadEvent(endpointIndex, endpoint, clusterId, attributeMetadata, buffer, maxReadLength);
 }
 

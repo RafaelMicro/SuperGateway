@@ -520,7 +520,7 @@ EmberAfStatus HandleContactSensorAttribute(DeviceAction action, uint16_t endpoin
 EmberAfStatus BridgedManagerImp::BridgedHandleReadEvent(uint16_t endpointIndex, EndpointId endpoint, 
     ClusterId clusterId, const EmberAfAttributeMetadata * attributeMetadata, uint8_t * buffer, uint16_t maxReadLength)
 {
-    deviceEP_t* dev = DeviceManager::GetDeviceList(endpointIndex);
+    deviceEP_t* dev = DeviceManager::GetDeviceList(endpoint);
     switch (dev->deviceType)
     {
     case (DEVICE_TYPE_ON_OFF_LIGHT):{ return HandleOnOffLightAttribute(DeviceAction::DeviceReadAttrs, endpointIndex, clusterId, attributeMetadata->attributeId, buffer, maxReadLength); }
@@ -534,7 +534,7 @@ EmberAfStatus BridgedManagerImp::BridgedHandleReadEvent(uint16_t endpointIndex, 
 EmberAfStatus BridgedManagerImp::BridgedHandleWriteEvent(uint16_t endpointIndex, EndpointId endpoint, 
     ClusterId clusterId, const EmberAfAttributeMetadata * attributeMetadata, uint8_t * buffer)
 {
-    deviceEP_t* dev = DeviceManager::GetDeviceList(endpointIndex);
+    deviceEP_t* dev = DeviceManager::GetDeviceList(endpoint);
     if(!dev->reachable) return EMBER_ZCL_STATUS_FAILURE;
     switch (dev->deviceType)
     {
