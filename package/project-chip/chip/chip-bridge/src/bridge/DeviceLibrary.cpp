@@ -17,19 +17,14 @@
 #include <lib/core/CHIPError.h>
 #include <lib/support/CHIPMem.h>
 #include <lib/support/ZclString.h>
-// #include <platform/CommissionableDataProvider.h>
-// #include <setup_payload/QRCodeSetupPayloadGenerator.h>
-// #include <setup_payload/SetupPayload.h>
 
 #include <pthread.h>
 #include <sys/ioctl.h>
 
 #include "CommissionableInit.h"
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 #include "DeviceLibrary.h"
 #include "ApplicationCluster.h"
-// #include "ClusterDefine.h"
-// #include "ClusterMacro.h"
 #include <app/server/Server.h>
 
 #include <cassert>
@@ -52,13 +47,54 @@ std::vector<deviceEP_t*> DeviceManager::epList;
 chip::EndpointId DeviceManager::gCurrentEndpointId;
 DeviceManager & DeviceMgr(void) { return DeviceManager::sDeviceManager; }
 
+deviceEP_t* DeviceManager::GetDeviceList(uint16_t idx) {
+    ChipLogProgress(DeviceLayer, "%s", __func__);
+    ChipLogProgress(DeviceLayer, "++++++++++++++++ target %d", idx);
+    for (auto ep : epList) {
+        ChipLogProgress(DeviceLayer, "Id: %d, Id_index: %d",  ep->endpointId, ep->endpointIndex);
+        if(ep->endpointIndex == idx) { 
+            ChipLogProgress(DeviceLayer, "Match");
+            return ep;
+        }
+    }
+    ChipLogProgress(DeviceLayer, "++++++++++++++++");
+    return nullptr;
+}
 
-static int light_id = 0;
-static int switch_id = 0;
-static int contact_sensor = 0;
+void DeviceManager::AddDeviceList(deviceEP_t * dev) { 
+    ChipLogProgress(DeviceLayer, "%s", __func__);
+    if(epList.size() > CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT)
+    {
+        ChipLogProgress(DeviceLayer, "Fully epList, Dynamic EP count: %d",
+                        CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT);
+        return ;
+    } 
+    epList.push_back(dev);
+    ChipLogProgress(DeviceLayer, "----------- %p", &epList);
+    for (auto ep : epList) {
+        ChipLogProgress(DeviceLayer, "Id: %d, Id_index: %d",  ep->endpointId, ep->endpointIndex);
+    }
+    ChipLogProgress(DeviceLayer, "-----------");
+};
+
+void DeviceManager::DelDeviceList(uint16_t idx) { 
+    ChipLogProgress(DeviceLayer, "%s", __func__);
+    for(uint16_t i = 0; i < epList.size(); i++) {
+        if(epList[i]->endpointIndex == idx) {
+            delete epList[i];
+            epList.erase(std::next(epList.begin(), i));
+        }
+    }
+};
+
+void DeviceManager::ListDeviceList() { 
+    ChipLogProgress(DeviceLayer, "EPId\tEPIndex");
+    for (auto ep : epList) {
+        ChipLogProgress(DeviceLayer, "%d\t%d", ep->endpointId, ep->endpointIndex);
+    }
+};
 
 chip::EndpointId gFirstDynamicEndpointId = 0;
-// Power source is on the same endpoint as the composed device
 std::vector<Room *> gRooms;
 std::vector<Action *> gActions;
 
@@ -115,9 +151,8 @@ void HandleDeviceStatusChanged(DeviceBase * dev, Changed_t itemChanged)
     }
 }
 
-Action::Action(uint16_t actionId, std::string name, Actions::ActionTypeEnum type, 
-               uint16_t endpointListId, uint16_t supportedCommands,
-               Actions::ActionStateEnum status, bool isVisible)
+Action::Action(uint16_t actionId, std::string name, Actions::ActionTypeEnum type, uint16_t endpointListId, 
+               uint16_t supportedCommands, Actions::ActionStateEnum status, bool isVisible)
 {
     mActionId          = actionId;
     mName              = name;
@@ -130,7 +165,6 @@ Action::Action(uint16_t actionId, std::string name, Actions::ActionTypeEnum type
 
 void HandleDeviceOnOffStatusChanged(DeviceBase * dev, Changed_t itemChanged)
 {
-    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     switch (itemChanged)
     {
     case ActionReachable:
@@ -145,45 +179,23 @@ void HandleDeviceOnOffStatusChanged(DeviceBase * dev, Changed_t itemChanged)
     }
 }
 
-int RemoveDeviceEndpoint(DeviceBase * dev)
-{
-    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    for(uint8_t index = 0; index < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT; index++)
-    {
-        if (DeviceMgr().GetDeviceList(index) != nullptr) { continue; }
-        // Todo: Update this to schedule the work rather than use this lock
-        DeviceLayer::StackLock lock;
-        EndpointId ep = emberAfClearDynamicEndpoint(index);
-        // DeviceMgr().SetDevice(index, nullptr);
-        ChipLogProgress(DeviceLayer, "Removed device %s from dynamic endpoint %d (index=%d)", dev->GetName(), ep, index);
-        // Silence complaints about unused ep when progress logging disabled.
-        UNUSED_VAR(ep);
-        return index;
-    }
-    return -1;
-}
-
 std::vector<EndpointListInfo> GetEndpointListInfo(chip::EndpointId parentId)
 {
-    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     std::vector<EndpointListInfo> infoList;
-
     for (auto room : gRooms)
     {
-        if (room->getIsVisible())
+        if (!room->getIsVisible()) continue; 
+        EndpointListInfo info(room->getEndpointListId(), room->getName(), room->getType());
+        for(uint8_t index = 0; index < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT; index++)
         {
-            EndpointListInfo info(room->getEndpointListId(), room->getName(), room->getType());
-            for(uint8_t index = 0; index < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT; index++)
+            deviceEP_t* dev = DeviceMgr().GetDeviceList(index);
+            if ((dev != nullptr) && (dev->endpointId == parentId))
             {
-                deviceEP_t* dev = DeviceMgr().GetDeviceList(index);
-                if ((dev != nullptr) && (dev->endpointId == parentId))
-                {
-                    std::string location = (room->getType() == Actions::EndpointListTypeEnum::kZone)? dev->name :dev->location;
-                    if (room->getName().compare(location) == 0) info.AddEndpointId(dev->endpointId);
-                }
+                std::string location = (room->getType() == Actions::EndpointListTypeEnum::kZone)? dev->name : dev->location;
+                if (room->getName().compare(location) == 0) info.AddEndpointId(dev->endpointId);
             }
-            if (info.GetEndpointListSize() > 0) infoList.push_back(info);
         }
+        if (info.GetEndpointListSize() > 0) infoList.push_back(info);
     }
     return infoList;
 }

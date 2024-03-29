@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "bridged-actions-stub.h"
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 #include "DeviceLibrary.h"
 #include "ApplicationCluster.h"
 
@@ -32,10 +32,9 @@ CHIP_ERROR ActionsAttrAccess::ReadActionListAttribute(EndpointId endpoint, Attri
         {
             if (action->getIsVisible())
             {
-                Actions::Structs::ActionStruct::Type actionStruct = { 
-                    action->getActionId(), CharSpan::fromCharString(action->getName().c_str()),
-                    action->getType(), action->getEndpointListId(),
-                    action->getSupportedCommands(), action->getStatus() };
+                Actions::Structs::ActionStruct::Type actionStruct = { action->getActionId(), 
+                CharSpan::fromCharString(action->getName().c_str()), action->getType(),
+                    action->getEndpointListId(), action->getSupportedCommands(), action->getStatus() };
                 ReturnErrorOnFailure(encoder.Encode(actionStruct));
             }
         }

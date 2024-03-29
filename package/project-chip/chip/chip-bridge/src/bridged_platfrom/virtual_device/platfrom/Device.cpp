@@ -1,10 +1,10 @@
 
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 
 #include <cstdio>
 #include <platform/CHIPDeviceLayer.h>
 
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 #include "DeviceLibrary.h"
 #include "ApplicationCluster.h"
 

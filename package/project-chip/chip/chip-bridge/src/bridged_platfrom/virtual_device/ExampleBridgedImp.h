@@ -17,7 +17,7 @@
 #include <lib/core/CHIPError.h>
 
 #include "BridgedManager.h"
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 
 namespace RafaelCluster
 {
@@ -30,10 +30,10 @@ enum DeviceAction
 
 class BridgedManagerImp : public BridgedManager{
 public:
-    EmberAfStatus BridgedHandleReadEvent(uint16_t endpointIndex, EndpointId endpoint, ClusterId clusterId,
+    EmberAfStatus BridgedHandleReadEvent(uint16_t endpointIndex, chip::EndpointId endpoint, chip::ClusterId clusterId,
                                         const EmberAfAttributeMetadata * attributeMetadata, 
                                         uint8_t * buffer, uint16_t maxReadLength) override;
-    EmberAfStatus BridgedHandleWriteEvent(uint16_t endpointIndex, EndpointId endpoint, ClusterId clusterId,
+    EmberAfStatus BridgedHandleWriteEvent(uint16_t endpointIndex, chip::EndpointId endpoint, chip::ClusterId clusterId,
                                         const EmberAfAttributeMetadata * attributeMetadata, 
                                         uint8_t * buffer) override;
 

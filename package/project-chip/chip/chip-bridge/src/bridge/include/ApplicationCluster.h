@@ -25,9 +25,8 @@
 #include <setup_payload/SetupPayload.h>
 
 #include "CommissionableInit.h"
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 #include "DeviceLibrary.h"
-#include "ClusterDefine.h"
 #include "ClusterMacro.h"
 #include <app/server/Server.h>
 

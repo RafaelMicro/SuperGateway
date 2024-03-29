@@ -21,19 +21,14 @@
 #include <lib/core/CHIPError.h>
 #include <lib/support/CHIPMem.h>
 #include <lib/support/ZclString.h>
-// #include <platform/CommissionableDataProvider.h>
-// #include <setup_payload/QRCodeSetupPayloadGenerator.h>
-// #include <setup_payload/SetupPayload.h>
 
 #include <pthread.h>
 #include <sys/ioctl.h>
 
 #include "CommissionableInit.h"
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 #include "DeviceLibrary.h"
 #include "ApplicationCluster.h"
-// #include "ClusterDefine.h"
-// #include "ClusterMacro.h"
 #include <app/server/Server.h>
 
 #include <cassert>

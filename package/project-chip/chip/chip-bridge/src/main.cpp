@@ -2,7 +2,7 @@
 #include <AppMain.h>
 #include <platform/CHIPDeviceLayer.h>
 #include <platform/PlatformManager.h>
-#include "BridgedInit.h"
+#include "Bridged.h"
 
 int main(int argc, char * argv[])
 {

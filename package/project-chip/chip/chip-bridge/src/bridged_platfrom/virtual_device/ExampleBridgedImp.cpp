@@ -1,5 +1,4 @@
 
-
 #include <AppMain.h>
 #include <platform/CHIPDeviceLayer.h>
 #include <platform/PlatformManager.h>
@@ -25,9 +24,10 @@
 #include "ExampleBridgedImp.h"
 #include "BridgedManager.h"
 #include "CommissionableInit.h"
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 #include "DeviceLibrary.h"
 #include "ApplicationCluster.h"
+#include "platfrom/cli.h"
 
 #include <cassert>
 #include <iostream>
@@ -45,10 +45,38 @@ using namespace Rafael::DeviceLibrary;
 namespace RafaelCluster
 {
 
+void * bridge_cli_thread(void * context)
+{
+  uint8_t ret;
+  CLI_Token_t TK;
+  str_space_t input;
+  input.ptr = (char *)malloc(sizeof(char) * CLI_MAX_BUFFER_SIZE);
+  input.len = CLI_MAX_BUFFER_SIZE;
+  while (true) {
+    printf("> ");
+    fgets((char *)input.ptr, input.len, stdin);
+    ret = cli_interpreter(&input, &TK);
+    
+  };
+  return nullptr;
+}
+
 static BridgedManagerImp sInstance;
 BridgedManagerImp & BridgedManagerImp::GetDefaultInstance() { return sInstance; }
 BridgedManager & BridgedMgrImpl() { return BridgedManagerImp::GetDefaultInstance(); }
-void BridgedManagerImp::Init(){ return; };
+void BridgedManagerImp::Init(){ 
+    emberAfEndpointEnableDisable(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1)), false);
+    {
+        pthread_t poll_thread;
+        int res = pthread_create(&poll_thread, nullptr, bridge_cli_thread, nullptr);
+        if (res)
+        {
+            printf("Error creating polling thread: %d\n", res);
+            exit(1);
+        }
+    }
+    return;
+};
 
 template<class T>
 EmberAfStatus HandleReadLevelControlAttribute(T * dev, chip::AttributeId attId, uint8_t *buffer, uint16_t maxLen)
@@ -503,9 +531,8 @@ EmberAfStatus BridgedManagerImp::BridgedHandleReadEvent(uint16_t endpointIndex, 
     return EMBER_ZCL_STATUS_SUCCESS;
 };
 
-EmberAfStatus BridgedManagerImp::BridgedHandleWriteEvent(
-    uint16_t endpointIndex, EndpointId endpoint, ClusterId clusterId, 
-    const EmberAfAttributeMetadata * attributeMetadata, uint8_t * buffer)
+EmberAfStatus BridgedManagerImp::BridgedHandleWriteEvent(uint16_t endpointIndex, EndpointId endpoint, 
+    ClusterId clusterId, const EmberAfAttributeMetadata * attributeMetadata, uint8_t * buffer)
 {
     deviceEP_t* dev = DeviceManager::GetDeviceList(endpointIndex);
     if(!dev->reachable) return EMBER_ZCL_STATUS_FAILURE;

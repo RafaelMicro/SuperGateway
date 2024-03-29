@@ -20,23 +20,26 @@ assert(chip_build_tools)
 
 executable("chip-bridge-app") {
   cflags = [ "-Wconversion" ]
-  include_dirs = [ ".", "bridge/include" ]
+  include_dirs = ["bridge/include" ]
   sources = [
     "${chip_root}/examples/tv-app/tv-common/include/CHIPProjectAppConfig.h",
     "main.cpp",
     "bridge/ApplicationCluster.cpp",
     "bridge/bridged-actions-stub.cpp",
     "bridge/DeviceLibrary.cpp",
-    "bridge/SingletonBridgedManager.cpp",
     "bridge/ClusterBase.cpp",
-    "bridge/BridgedInit.cpp",
+    "bridge/Bridged.cpp",
   ]
 
+  include_dirs += [ "./bridged_platfrom/virtual_device" ]
   sources += [
-    "bridged_platfrom/Device.cpp",
-    "bridged_platfrom/Device.h",
-    "bridged_platfrom/ExampleBridgedImp.cpp",
-    "bridged_platfrom/ExampleBridgedImp.h",
+    "bridged_platfrom/virtual_device/platfrom/Device.cpp",
+    "bridged_platfrom/virtual_device/platfrom/Device.h",
+    "bridged_platfrom/virtual_device/platfrom/cli_interface.cpp",
+    "bridged_platfrom/virtual_device/platfrom/cli.c",
+    "bridged_platfrom/virtual_device/platfrom/cli.h",
+    "bridged_platfrom/virtual_device/ExampleBridgedImp.cpp",
+    "bridged_platfrom/virtual_device/ExampleBridgedImp.h",
   ]
 
   deps = [

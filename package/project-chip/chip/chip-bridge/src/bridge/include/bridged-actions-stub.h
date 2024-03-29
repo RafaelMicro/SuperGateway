@@ -12,7 +12,7 @@
 
 #include <vector>
 
-#include "bridged_platfrom/Device.h"
+#include "platfrom/Device.h"
 #include "DeviceLibrary.h"
 #include "ApplicationCluster.h"
 

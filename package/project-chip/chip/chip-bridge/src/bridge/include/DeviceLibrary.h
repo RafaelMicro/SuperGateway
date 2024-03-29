@@ -7,7 +7,12 @@
 #include <app/util/attribute-storage.h>
 #include <lib/core/DataModelTypes.h>
 
+#ifndef DataVersion
+typedef uint32_t DataVersion;
+#endif
+
 typedef struct {
+    uint16_t endpointIndex;
     uint16_t endpointId;
     uint16_t deviceType;
     std::string name;
@@ -15,12 +20,9 @@ typedef struct {
     bool reachable;
 } deviceEP_t;
 
-#ifndef DataVersion
-typedef uint32_t DataVersion;
-#endif
-
 template <typename T>
 struct device_t{
+    uint16_t endpointIndex;
     uint16_t endpointId;
     T* device;
 };
@@ -42,36 +44,79 @@ private:
 
 public:
     static void Init();
-    static deviceEP_t* GetDeviceList(uint16_t i) { return (i< epList.size())? epList[i] : nullptr; }
-    static void AddDeviceList(deviceEP_t * dev) { epList.push_back(dev);};
+    static deviceEP_t* GetDeviceList(uint16_t idx);
+    static void AddDeviceList(deviceEP_t * dev);
+    static void DelDeviceList(uint16_t idx);
+    static void ListDeviceList();
     template <typename T>
-    static device_t<T> * GetDevice(uint16_t i) { return (i < devList<T>.size())? devList<T>[i] : nullptr; }
+    static device_t<T>* GetDevice(uint16_t idx) {
+        for(uint16_t i = 0; i < devList<T>.size(); i++) { 
+            if(devList<T>[i]->endpointIndex == idx) { return devList<T>[i]; } 
+        }
+        return nullptr; 
+    };
     template <typename T>
-    static void AddDevice(device_t<T> * dev) { devList<T>.push_back(dev); };
+    static void AddDevice(device_t<T> * dev) { 
+        if(epList.size() > CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT)
+        {
+            ChipLogProgress(DeviceLayer, "Fully devList, Matter Dynamic endpoint count: %d\n", CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT);
+            return ;
+        }
+        devList<T>.push_back(dev);
+    };
+    template <typename T>
+    static void DelDevice(uint16_t epIndex) {
+        ChipLogProgress(DeviceLayer, "%s", __func__);
+        for(uint16_t i = 0; i < epList.size(); i++) {
+            if(epList[i]->endpointIndex == epIndex) {
+                free(devList<T>[epIndex]);
+                devList<T>.erase(std::next(devList<T>.begin(), epIndex));
+            }
+        }
+
+        // for(uint16_t idx = 0; idx < devList<T>.size(); idx++) {
+        //     if(devList<T>[idx]->endpointIndex == epIndex) 
+        //     { devList<T>.erase(std::next(devList<T>.begin(), idx)); }
+        // }
+    };
+
+    template <class T>
+    static void DelDeviceEndpoint(uint16_t idx) {
+        if (GetDeviceList(idx) == nullptr)  { 
+            ChipLogProgress(DeviceLayer, "Endpoint Index not found");
+            return;
+        }
+        chip::DeviceLayer::StackLock lock;
+        ChipLogProgress(DeviceLayer, "try delete device: %d", idx);
+        chip::EndpointId ep = emberAfClearDynamicEndpoint(idx);
+        ChipLogProgress(DeviceLayer, "Removed device from dynamic endpoint %d (index=%d)", ep, idx);
+        DelDeviceList(idx);
+        DelDevice<T>(idx);
+        UNUSED_VAR(ep);
+        return;
+    }
     template <typename T, class M>
-    static int AddDeviceEndpoint(M* dev_set, device_t<T>* epDevice, 
-        deviceEP_t* epType, chip::EndpointId parentEPId = chip::kInvalidEndpointId)
-    {
+    static int AddDeviceEndpoint(M* dev_set, device_t<T>* epDevice, deviceEP_t* epType, chip::EndpointId parentEPId = chip::kInvalidEndpointId) {
         auto dev = epDevice->device;
         EmberAfStatus ret;
-        ChipLogProgress(DeviceLayer, "\n\n**** %s\nGen device EP_Id:%d, Device_Type:%d\n", 
-                        __FUNCTION__, gCurrentEndpointId, epType->deviceType);
-        
+        ChipLogProgress(DeviceLayer, "Gen device EP_Id:%d, Device_Type:%d\n", gCurrentEndpointId, epType->deviceType);
         for(uint8_t index = 0; index < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT; index++)
         {
             if (GetDeviceList(index) != nullptr)  { continue; }
             chip::DeviceLayer::StackLock lock;
+            epDevice->endpointIndex = index;
+            epType->endpointIndex = index;
             dev->SetEndpointId(gCurrentEndpointId);
             dev->SetParentEndpointId(parentEPId);
             chip::Span<DataVersion> DV(&dev_set->DataVersions[0], dev_set->ClusterSize);
             chip::Span<const EmberAfDeviceType> DT(&dev_set->DeviceTypes[0], dev_set->DeviceTypeSize);
             ret = emberAfSetDynamicEndpoint(index, gCurrentEndpointId, &dev_set->Endpoint, DV, DT, parentEPId);
-            ChipLogProgress(DeviceLayer, "emberAfSetDynamicEndpoint ret: %d", ret);
+            ChipLogProgress(DeviceLayer, "Call Matter Stack status: emberAfSetDynamicEndpoint ret= %d", ret);
             if (ret == EMBER_ZCL_STATUS_SUCCESS)
             {
                 AddDevice(epDevice);
                 AddDeviceList(epType);
-                ChipLogProgress(DeviceLayer, "Added device %s to dynamic endpoint %d (index=%d)", 
+                ChipLogProgress(DeviceLayer, "Added device %s to dynamic endpoint %d (index= %d)", 
                                 dev->GetName(), gCurrentEndpointId, index);
                 gCurrentEndpointId++;
                 return index;
@@ -85,21 +130,22 @@ public:
     template <class T, class M>
     static void publishDevice(M* dev, uint16_t deviceType)
     {
-        device_t<T> epDevice;
-        deviceEP_t epType;
+        ChipLogProgress(DeviceLayer, "%s", __func__);
+        device_t<T>* epDevice = new device_t<T>();
+        deviceEP_t* epType = new deviceEP_t();
         T DeviceInst((char *)dev->name.c_str(), dev->location);
         DeviceInst.SetReachable(true);
 
-        epDevice.device = &DeviceInst;
-        epDevice.endpointId = gCurrentEndpointId;
+        epDevice->device = &DeviceInst;
+        epDevice->endpointId = gCurrentEndpointId;
 
-        epType.deviceType = deviceType;
-        epType.endpointId = gCurrentEndpointId;
-        epType.reachable = DeviceInst.IsReachable();
-        epType.name = dev->name;
-        epType.location = dev->location;
+        epType->deviceType = deviceType;
+        epType->endpointId = gCurrentEndpointId;
+        epType->reachable = DeviceInst.IsReachable();
+        epType->name = std::string(dev->name);
+        epType->location = std::string(dev->location);
 
-        AddDeviceEndpoint<T>(dev, &epDevice, &epType, 1);
+        AddDeviceEndpoint<T>(dev, epDevice, epType, 1);
     };
 };
 DeviceManager & DeviceMgr(void);

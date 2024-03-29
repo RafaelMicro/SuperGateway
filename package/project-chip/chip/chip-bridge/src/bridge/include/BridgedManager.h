@@ -16,22 +16,14 @@
 #include <credentials/examples/DeviceAttestationCredsExample.h>
 #include <lib/core/CHIPError.h>
 
-
-using namespace chip;
-using namespace chip::app;
-using namespace chip::Credentials;
-using namespace chip::Inet;
-using namespace chip::Transport;
-using namespace chip::DeviceLayer;
-
 namespace RafaelCluster
 {
 class BridgedManager {
 public:
-    virtual EmberAfStatus BridgedHandleReadEvent(uint16_t endpointIndex, EndpointId endpoint, ClusterId clusterId,
+    virtual EmberAfStatus BridgedHandleReadEvent(uint16_t endpointIndex, chip::EndpointId endpoint, chip::ClusterId clusterId,
                                         const EmberAfAttributeMetadata * attributeMetadata, 
                                         uint8_t * buffer, uint16_t maxReadLength) = 0;
-    virtual EmberAfStatus BridgedHandleWriteEvent(uint16_t endpointIndex, EndpointId endpoint, ClusterId clusterId,
+    virtual EmberAfStatus BridgedHandleWriteEvent(uint16_t endpointIndex, chip::EndpointId endpoint, chip::ClusterId clusterId,
                                         const EmberAfAttributeMetadata * attributeMetadata, 
                                         uint8_t * buffer) = 0;
     virtual void Init() = 0;
