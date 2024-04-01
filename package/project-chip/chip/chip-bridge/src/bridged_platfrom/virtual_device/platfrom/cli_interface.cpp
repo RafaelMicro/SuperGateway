@@ -65,9 +65,7 @@ void cliHelp(CLI_Token_t *TK) {
 
 void cliGenOnOffLight(CLI_Token_t *TK) {
   std::string name = DEFAULT_ONOFF_LIGHT_NAME + std::to_string(dev_index++);
-  printf("TTTTTT\n\tname:%s\n\tlocation:%s\n",  name.c_str(),  room.c_str());
   DeviceAttOnOffLight devLight(name, room);
-  printf("TTTTTT\n\tname:%s\n\tlocation:%s\n", devLight.name.c_str(),  devLight.location.c_str());
   Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLight, DeviceAttOnOffLight>(
     &devLight, DEVICE_TYPE_ON_OFF_LIGHT);
 }
