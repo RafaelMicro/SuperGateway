@@ -45,6 +45,7 @@ private:
 public:
     static void Init();
     static deviceEP_t* GetDeviceList(uint16_t idx);
+    static deviceEP_t* GetDeviceIndex(uint16_t idx);
     static void AddDeviceList(deviceEP_t * dev);
     static void DelDeviceList(uint16_t idx);
     static void ListDeviceList();
@@ -100,9 +101,9 @@ public:
         auto dev = epDevice->device;
         EmberAfStatus ret;
         ChipLogProgress(DeviceLayer, "Gen device EP_Id:%d, Device_Type:%d\n", gCurrentEndpointId, epType->deviceType);
-        for(uint8_t index = 0; index <= gCurrentEndpointId + 1; index++)
+        for(uint8_t index = 00; index <= gCurrentEndpointId + 1; index++)
         {
-            if (GetDeviceList(index) != nullptr)  { continue; }
+            if (GetDeviceIndex(index) != nullptr)  { continue; }
             chip::DeviceLayer::StackLock lock;
             epDevice->endpointIndex = index;
             epType->endpointIndex = index;
@@ -117,7 +118,7 @@ public:
                 AddDevice(epDevice);
                 AddDeviceList(epType);
                 ChipLogProgress(DeviceLayer, "Added device %s to dynamic endpoint %d (index= %d)", 
-                                dev->GetName(), gCurrentEndpointId, index);
+                                dev->GetName().c_str(), gCurrentEndpointId, index);
                 gCurrentEndpointId++;
                 return index;
             }
@@ -128,12 +129,12 @@ public:
     };
 
     template <class T, class M>
-    static void publishDevice(M* dev, uint16_t deviceType)
+    static void publishDevice(M *dev, uint16_t deviceType)
     {
         ChipLogProgress(DeviceLayer, "%s", __func__);
         device_t<T>* epDevice = new device_t<T>();
         deviceEP_t* epType = new deviceEP_t();
-        T DeviceInst((char *)dev->name.c_str(), dev->location);
+        T DeviceInst(dev->name, dev->location);
         DeviceInst.SetReachable(true);
 
         epDevice->device = &DeviceInst;

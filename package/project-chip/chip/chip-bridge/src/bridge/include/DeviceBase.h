@@ -85,8 +85,6 @@ public:
         ZAP_DEVICE_TYPE(DEVICE_TYPE_ON_OFF_LIGHT), ZAP_DEVICE_TYPE(DEVICE_TYPE_BRIDGED_NODE)
     };
     uint8_t DeviceTypeSize = 2;
-    std::string name;
-    std::string location;
 
 };
 
@@ -110,8 +108,6 @@ public:
         ZAP_DEVICE_TYPE(DEVICE_TYPE_ON_OFF_LIGHT_SWITCH), ZAP_DEVICE_TYPE(DEVICE_TYPE_BRIDGED_NODE)
     };
     uint8_t DeviceTypeSize = 2;
-    std::string name;
-    std::string location;
 };
 
 
@@ -135,8 +131,6 @@ public:
         ZAP_DEVICE_TYPE(DEVICE_TYPE_CONTACT_SENSOR), ZAP_DEVICE_TYPE(DEVICE_TYPE_BRIDGED_NODE)
     };
     uint8_t DeviceTypeSize = 2;
-    std::string name;
-    std::string location;
 };
 
 

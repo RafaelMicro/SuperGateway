@@ -10,7 +10,7 @@
 
 using namespace chip::app::Clusters::Actions;
 
-DeviceOnOffLight::DeviceOnOffLight(const char * szDeviceName, std::string szLocation) : DeviceBase(szDeviceName, szLocation)
+DeviceOnOffLight::DeviceOnOffLight(std::string szDeviceName, std::string szLocation) : DeviceBase(szDeviceName, szLocation)
 {
     mOn = false;
     mCurrentLevel = 0;
@@ -21,7 +21,7 @@ void DeviceOnOffLight::HandleDeviceChange(DeviceBase * device, Changed_t changeM
     if (mChanged_CB) mChanged_CB(this, changeMask);
 }
 
-DeviceOnOffLightSwitch::DeviceOnOffLightSwitch(const char * szDeviceName, std::string szLocation) : DeviceBase(szDeviceName, szLocation)
+DeviceOnOffLightSwitch::DeviceOnOffLightSwitch(std::string szDeviceName, std::string szLocation) : DeviceBase(szDeviceName, szLocation)
 {
     mOn = false;
 }
@@ -31,7 +31,7 @@ void DeviceOnOffLightSwitch::HandleDeviceChange(DeviceBase * device, Changed_t c
     if (mChanged_CB) mChanged_CB(this, changeMask);
 }
 
-DeviceContactSensor::DeviceContactSensor(const char * szDeviceName, std::string szLocation) : DeviceBase(szDeviceName, szLocation)
+DeviceContactSensor::DeviceContactSensor(std::string szDeviceName, std::string szLocation) : DeviceBase(szDeviceName, szLocation)
 {
     mStateValue = false;
 }

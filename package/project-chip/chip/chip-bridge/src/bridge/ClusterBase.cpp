@@ -11,27 +11,24 @@
 
 using namespace chip::app::Clusters::Actions;
 
-DeviceAttBase::DeviceAttBase(std::string aname, std::string alocation) { name = aname; location = alocation; };
-DeviceAttOnOffLight::DeviceAttOnOffLight(std::string aname, std::string alocation) : DeviceAttBase(aname, alocation) {};
-DeviceAttOnOffLightSwitch::DeviceAttOnOffLightSwitch(std::string aname, std::string alocation) : DeviceAttBase(aname, alocation) {};
-DeviceAttContactSensor::DeviceAttContactSensor(std::string aname, std::string alocation) : DeviceAttBase(aname, alocation) {};
+DeviceAttBase::DeviceAttBase(std::string aname, std::string alocation) 
+    :name(std::move(aname)), location(std::move(alocation)) {};
+DeviceAttOnOffLight::DeviceAttOnOffLight(std::string aname, std::string alocation) 
+    : DeviceAttBase(aname, alocation) {};
+DeviceAttOnOffLightSwitch::DeviceAttOnOffLightSwitch(std::string aname, std::string alocation) 
+    : DeviceAttBase(aname, alocation) {};
+DeviceAttContactSensor::DeviceAttContactSensor(std::string aname, std::string alocation) 
+    : DeviceAttBase(aname, alocation) {};
 
-DeviceBase::DeviceBase(const char * szDeviceName, std::string szLocation)
-{
-    mLocation = szLocation;
-    mReachable = false;
-    mEndpointId = 0;
-    mName[kDeviceNameSize];
-    chip::Platform::CopyString(mName, szDeviceName);
-}
+DeviceBase::DeviceBase(std::string szDeviceName, std::string szLocation)
+    : mReachable(false), mEndpointId(0), mName(std::move(szDeviceName)), mLocation(std::move(szLocation)){};
 
 bool DeviceBase::IsReachable() { return mReachable; }
 
 void DeviceBase::SetReachable(bool aReachable)
 {
-    ChipLogProgress(DeviceLayer, "Device[%s]: %s", mName, aReachable?"ONLINE":"OFFLINE");
-    if (mReachable != aReachable)
-    {
+    ChipLogProgress(DeviceLayer, "Device[%s]: %s", mName.c_str(), aReachable?"ONLINE":"OFFLINE");
+    if (mReachable != aReachable) {
         mReachable = aReachable;
         HandleDeviceChange(this, ActionReachable);
     }
@@ -39,21 +36,19 @@ void DeviceBase::SetReachable(bool aReachable)
 
 void DeviceBase::SetLocation(std::string szLocation)
 {
-    ChipLogProgress(DeviceLayer, "Device[%s]: Location=%s", mName, mLocation.c_str());
-    if (mLocation.compare(szLocation) != 0)
-    {
+    ChipLogProgress(DeviceLayer, "Device[%s]: Location=%s", mName.c_str(), szLocation.c_str());
+    if (mLocation.compare(szLocation) != 0) {
         mLocation = szLocation;
         HandleDeviceChange(this, ActionLocation);
     }
 }
 
-void DeviceBase::SetName(const char * szName)
+void DeviceBase::SetName(std::string szName)
 {
-    ChipLogProgress(DeviceLayer, "Device[%s]: New Name=%s", mName, szName);
-    if (strncmp(mName, szName, sizeof(mName)) != 0)
-    {
-        chip::Platform::CopyString(mName, szName);
-        HandleDeviceChange(this, ActionName);
+    ChipLogProgress(DeviceLayer, "Device[%s]: New Name=%s", mName.c_str(), szName.c_str());
+    if (mLocation.compare(szName) != 0) {
+        mName = szName;
+        HandleDeviceChange(this, ActionLocation);
     }
 }
 

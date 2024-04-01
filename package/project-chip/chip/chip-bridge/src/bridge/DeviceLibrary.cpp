@@ -45,16 +45,24 @@ namespace DeviceLibrary {
 DeviceManager DeviceManager::sDeviceManager;
 std::vector<deviceEP_t*> DeviceManager::epList;
 chip::EndpointId DeviceManager::gCurrentEndpointId;
-DeviceManager & DeviceMgr(void) { return DeviceManager::sDeviceManager; }
+DeviceManager & DeviceMgr(void) { return DeviceManager::sDeviceManager; };
 
 deviceEP_t* DeviceManager::GetDeviceList(uint16_t idx) {
-    for (auto ep : epList)  if(ep->endpointId == idx) return ep;
+    for (auto ep : epList) {
+        if(ep->endpointId == idx) return ep;
+    }
     return nullptr;
-}
+};
+
+deviceEP_t* DeviceManager::GetDeviceIndex(uint16_t idx) {
+    for (auto ep : epList) {
+        if(ep->endpointIndex == idx) return ep;
+    }
+    return nullptr;
+};
 
 void DeviceManager::AddDeviceList(deviceEP_t * dev) { 
-    if(epList.size() > CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT)
-    {
+    if(epList.size() > CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT) {
         ChipLogProgress(DeviceLayer, "Fully epList, Dynamic EP count: %d",
                         CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT);
         return ;
@@ -73,9 +81,7 @@ void DeviceManager::DelDeviceList(uint16_t idx) {
 
 void DeviceManager::ListDeviceList() { 
     ChipLogProgress(DeviceLayer, "EPId\tEPIndex");
-    for (auto ep : epList) {
-        ChipLogProgress(DeviceLayer, "%d\t%d", ep->endpointId, ep->endpointIndex);
-    }
+    for(auto ep : epList) ChipLogProgress(DeviceLayer, "%d\t%d", ep->endpointId, ep->endpointIndex);
 };
 
 chip::EndpointId gFirstDynamicEndpointId = 0;

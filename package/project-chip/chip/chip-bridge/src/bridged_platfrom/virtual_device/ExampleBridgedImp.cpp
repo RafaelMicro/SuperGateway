@@ -41,7 +41,6 @@ using namespace chip::Transport;
 using namespace chip::DeviceLayer;
 using namespace Rafael::DeviceLibrary;
 
-
 namespace RafaelCluster
 {
 
@@ -59,18 +58,17 @@ void * bridge_cli_thread(void * context)
     
   };
   return nullptr;
-}
+};
 
 static BridgedManagerImp sInstance;
-BridgedManagerImp & BridgedManagerImp::GetDefaultInstance() { return sInstance; }
-BridgedManager & BridgedMgrImpl() { return BridgedManagerImp::GetDefaultInstance(); }
+BridgedManagerImp & BridgedManagerImp::GetDefaultInstance() { return sInstance; };
+BridgedManager & BridgedMgrImpl() { return BridgedManagerImp::GetDefaultInstance(); };
 void BridgedManagerImp::Init(){ 
     emberAfEndpointEnableDisable(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1)), false);
     {
         pthread_t poll_thread;
         int res = pthread_create(&poll_thread, nullptr, bridge_cli_thread, nullptr);
-        if (res)
-        {
+        if (res) {
             printf("Error creating polling thread: %d\n", res);
             exit(1);
         }
@@ -85,84 +83,68 @@ EmberAfStatus HandleReadLevelControlAttribute(T * dev, chip::AttributeId attId, 
     {
         case Clusters::LevelControl::Attributes::CurrentLevel::Id:{
             *buffer = dev->GetCurrentLevel();
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::RemainingTime::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::MinLevel::Id:{
             *buffer = 1;
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::MaxLevel::Id:{
             *buffer = 254;
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::CurrentFrequency::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::MinFrequency::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::MaxFrequency::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::OnOffTransitionTime::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::OnLevel::Id:{
             *buffer = 1;
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::OnTransitionTime::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::OffTransitionTime::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::DefaultMoveRate::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::Options::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::StartUpCurrentLevel::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_LEVEL_CONTROL;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::FeatureMap::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_LEVEL_CONTROL;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleWriteLevelControlAttribute(T * dev, chip::AttributeId attId, uint8_t * buffer)
@@ -171,17 +153,15 @@ EmberAfStatus HandleWriteLevelControlAttribute(T * dev, chip::AttributeId attId,
     {
         case Clusters::LevelControl::Attributes::CurrentLevel::Id:{
             dev->SetCurrentLevel(*buffer);
-            break;
-        }
+            break;}
         case Clusters::LevelControl::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_LEVEL_CONTROL;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleReadScenesAttribute(T *dev, chip::AttributeId attId, uint8_t * buffer, uint16_t maxLen)
@@ -190,22 +170,19 @@ EmberAfStatus HandleReadScenesAttribute(T *dev, chip::AttributeId attId, uint8_t
     {
         case Clusters::Scenes::Attributes::NameSupport::Id:{
             *buffer = 0;
-            break;
-        }
+            break;}
         case Clusters::Scenes::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_SCENES;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::Scenes::Attributes::FeatureMap::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_SCENES;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 EmberAfStatus HandleWriteScenesAttribute(chip::AttributeId attId, uint8_t * buffer)
 {
@@ -215,12 +192,11 @@ EmberAfStatus HandleWriteScenesAttribute(chip::AttributeId attId, uint8_t * buff
         case Clusters::Scenes::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_SCENES;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleReadGroupsAttribute(T * dev, chip::AttributeId attId, uint8_t * buffer, uint16_t maxLen)
@@ -229,22 +205,19 @@ EmberAfStatus HandleReadGroupsAttribute(T * dev, chip::AttributeId attId, uint8_
     {
         case Clusters::Groups::Attributes::NameSupport::Id:{
             *buffer = 0;
-            break;
-        }
+            break;}
         case Clusters::Groups::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_GROUPS;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::Groups::Attributes::FeatureMap::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_GROUPS;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 EmberAfStatus HandleWriteGroupsAttribute(chip::AttributeId attId, uint8_t * buffer)
 {
@@ -254,12 +227,11 @@ EmberAfStatus HandleWriteGroupsAttribute(chip::AttributeId attId, uint8_t * buff
         case Clusters::Groups::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_GROUPS;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleReadIdentifyAttribute(T *dev, chip::AttributeId attId, uint8_t * buffer, uint16_t maxLen)
@@ -269,26 +241,22 @@ EmberAfStatus HandleReadIdentifyAttribute(T *dev, chip::AttributeId attId, uint8
         case Clusters::Identify::Attributes::IdentifyTime::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::Identify::Attributes::IdentifyType::Id:{
             *buffer = 0;
-            break;
-        }
+            break;}
         case Clusters::Identify::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_IDENTIFY;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::Identify::Attributes::FeatureMap::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_IDENTIFY;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 EmberAfStatus HandleWriteIdentifyAttribute(chip::AttributeId attId, uint8_t * buffer)
 {
@@ -299,12 +267,11 @@ EmberAfStatus HandleWriteIdentifyAttribute(chip::AttributeId attId, uint8_t * bu
         case Clusters::Identify::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_IDENTIFY;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_SUCCESS; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleReadOnOffAttribute(T* dev, chip::AttributeId attId, uint8_t * buffer, uint16_t maxLen)
@@ -313,36 +280,30 @@ EmberAfStatus HandleReadOnOffAttribute(T* dev, chip::AttributeId attId, uint8_t 
     {
         case Clusters::OnOff::Attributes::OnOff::Id:{
             *buffer = dev->GetOnOffState() ? 1 : 0;
-            break;
-        }
+            break;}
         case Clusters::OnOff::Attributes::GlobalSceneControl::Id:{
             *buffer = 1;
-            break;
-        }
+            break;}
         case Clusters::OnOff::Attributes::OnTime::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::OnOff::Attributes::OffWaitTime::Id:{
             uint16_t rev = 0;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::OnOff::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_ON_OFF;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::OnOff::Attributes::FeatureMap::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_ON_OFF;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleWriteOnOffAttribute(T* dev, chip::AttributeId attributeId, uint8_t* buffer)
@@ -361,7 +322,7 @@ EmberAfStatus HandleWriteOnOffAttribute(T* dev, chip::AttributeId attributeId, u
         default: { return EMBER_ZCL_STATUS_SUCCESS; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleReadBooleanStateAttribute(T* dev, chip::AttributeId attId, uint8_t * buffer, uint16_t maxLen)
@@ -370,22 +331,19 @@ EmberAfStatus HandleReadBooleanStateAttribute(T* dev, chip::AttributeId attId, u
     {
         case Clusters::BooleanState::Attributes::StateValue::Id:{
             *buffer = dev->GetStateValue() ? 1 : 0;
-            break;
-        }
+            break;}
         case Clusters::BooleanState::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_BOOLEAN_STATE;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::BooleanState::Attributes::FeatureMap::Id:{
             uint16_t rev = (0u);
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleWriteBooleanStateAttribute(T* dev, chip::AttributeId attributeId, uint8_t* buffer)
@@ -394,17 +352,15 @@ EmberAfStatus HandleWriteBooleanStateAttribute(T* dev, chip::AttributeId attribu
     {
         case Clusters::BooleanState::Attributes::StateValue::Id:{
             dev->SetStateValue((*buffer)?true:false);
-            break;
-        }
+            break;}
         case Clusters::BooleanState::Attributes::ClusterRevision::Id:{
             uint16_t rev = ZCL_CLUSTER_REVISION_BOOLEAN_STATE;
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_SUCCESS; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 template<class T>
 EmberAfStatus HandleReadBridgedDeviceBasicAttribute(T * dev, chip::AttributeId attId, uint8_t * buffer, uint16_t maxLen)
@@ -413,27 +369,23 @@ EmberAfStatus HandleReadBridgedDeviceBasicAttribute(T * dev, chip::AttributeId a
     {
         case Clusters::BridgedDeviceBasicInformation::Attributes::Reachable::Id:{
             *buffer = dev->IsReachable() ? 1 : 0;
-            break;
-        }
+            break;}
         case Clusters::BridgedDeviceBasicInformation::Attributes::NodeLabel::Id:{
             MutableByteSpan zclNameSpan(buffer, maxLen);
-            MakeZclCharString(zclNameSpan, dev->GetName());
-            break;
-        }
+            MakeZclCharString(zclNameSpan, dev->GetName().c_str());
+            break;}
         case Clusters::BridgedDeviceBasicInformation::Attributes::ClusterRevision::Id:{
             uint16_t rev = (2u);
             memcpy(buffer, &rev, sizeof(rev));
-            break;
-        }
+            break;}
         case Clusters::BridgedDeviceBasicInformation::Attributes::FeatureMap::Id:{
             uint32_t featureMap = (0u);
             memcpy(buffer, &featureMap, sizeof(featureMap));
-            break;
-        }
+            break;}
         default: { return EMBER_ZCL_STATUS_FAILURE; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
-}
+};
 
 
 EmberAfStatus HandleOnOffLightAttribute(DeviceAction action, uint16_t endpointIndex, 

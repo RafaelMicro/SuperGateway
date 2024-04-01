@@ -26,12 +26,12 @@ public:
     static const int kDeviceNameSize = 32;
     Changed_t kChanged;
     
-    DeviceBase(const char * szDeviceName, std::string szLocation);
+    DeviceBase(std::string szDeviceName, std::string szLocation);
     virtual ~DeviceBase() {};
 
     bool IsReachable();
     void SetReachable(bool aReachable);
-    void SetName(const char * szDeviceName);
+    void SetName(std::string szDeviceName);
     void SetLocation(std::string szLocation);
     inline void SetEndpointId(chip::EndpointId id) { mEndpointId = id; };
     inline chip::EndpointId GetEndpointId() { return mEndpointId; };
@@ -39,7 +39,7 @@ public:
     inline uint8_t GetDeviceType() { return mDeviceType; };
     inline void SetParentEndpointId(chip::EndpointId id) { mParentEndpointId = id; };
     inline chip::EndpointId GetParentEndpointId() { return mParentEndpointId; };
-    inline char * GetName() { return mName; };
+    inline std::string GetName() { return mName; };
     inline std::string GetLocation() { return mLocation; };
     inline std::string GetZone() { return mZone; };
     inline void SetZone(std::string zone) { mZone = zone; };
@@ -49,11 +49,13 @@ private:
 
 protected:
     bool mReachable;
-    char mName[kDeviceNameSize];
-    uint8_t mDeviceType;
-    std::string mLocation;
     chip::EndpointId mEndpointId;
+    std::string mName;
+    std::string mLocation;
+    // char mName[kDeviceNameSize];
+    // char mLocation[kDeviceNameSize];
     chip::EndpointId mParentEndpointId;
+    uint8_t mDeviceType;
     std::string mZone;
 };
 

@@ -64,24 +64,26 @@ void cliHelp(CLI_Token_t *TK) {
 }
 
 void cliGenOnOffLight(CLI_Token_t *TK) {
-  std::string name = DEFAULT_ONOFF_LIGHT_NAME +  std::to_string(dev_index++);
+  std::string name = DEFAULT_ONOFF_LIGHT_NAME + std::to_string(dev_index++);
+  printf("TTTTTT\n\tname:%s\n\tlocation:%s\n",  name.c_str(),  room.c_str());
   DeviceAttOnOffLight devLight(name, room);
-  uint16_t deviceType = DEVICE_TYPE_ON_OFF_LIGHT;
-  Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLight, DeviceAttOnOffLight>(&devLight, deviceType);
+  printf("TTTTTT\n\tname:%s\n\tlocation:%s\n", devLight.name.c_str(),  devLight.location.c_str());
+  Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLight, DeviceAttOnOffLight>(
+    &devLight, DEVICE_TYPE_ON_OFF_LIGHT);
 }
 
 void cligenOnOffLightSwitch(CLI_Token_t *TK) {
-  std::string name = DEFAULT_ONOFF_LIGHT_SWITCH_NAME +  std::to_string(dev_index++);
+  std::string name = DEFAULT_ONOFF_LIGHT_SWITCH_NAME + std::to_string(dev_index++);
   DeviceAttOnOffLightSwitch devLightSwitch(name, room);
-  uint16_t deviceType = DEVICE_TYPE_ON_OFF_LIGHT_SWITCH;
-  Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLightSwitch, DeviceAttOnOffLightSwitch>(&devLightSwitch, deviceType);
+  Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLightSwitch, DeviceAttOnOffLightSwitch>(
+    &devLightSwitch, DEVICE_TYPE_ON_OFF_LIGHT_SWITCH);
 }
 
 void cliGenContactSensor(CLI_Token_t *TK) {
-  std::string name = DEFAULT_CONTACT_SENSOR_NAME +  std::to_string(dev_index++);
+  std::string name = DEFAULT_CONTACT_SENSOR_NAME + std::to_string(dev_index++);
   DeviceAttContactSensor devContactSensor(name, room);
-  uint16_t deviceType = DEVICE_TYPE_CONTACT_SENSOR;
-  Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceContactSensor, DeviceAttContactSensor>(&devContactSensor, deviceType);
+  Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceContactSensor, DeviceAttContactSensor>(
+    &devContactSensor, DEVICE_TYPE_CONTACT_SENSOR);
 }
 
 void cliDelOnOffLight(CLI_Token_t *TK) {

@@ -8,7 +8,7 @@
 class DeviceOnOffLight : public DeviceBase, public ClusterOnOff, public ClusterLevelControl
 {
 public:
-    DeviceOnOffLight(const char * szDeviceName, std::string szLocation);
+    DeviceOnOffLight(std::string szDeviceName, std::string szLocation);
     using DeviceCB_fn = std::function<void(DeviceOnOffLight *, Changed_t)>;
     DeviceCB_fn mChanged_CB;
 
@@ -19,7 +19,7 @@ private:
 class DeviceOnOffLightSwitch : public DeviceBase, public ClusterOnOff
 {
 public:
-    DeviceOnOffLightSwitch(const char * szDeviceName, std::string szLocation);
+    DeviceOnOffLightSwitch(std::string szDeviceName, std::string szLocation);
     using DeviceCB_fn = std::function<void(DeviceOnOffLightSwitch *, Changed_t)>;
     DeviceCB_fn mChanged_CB;
 
@@ -31,7 +31,7 @@ private:
 class DeviceContactSensor : public DeviceBase, public ClusterBooleanState
 {
 public:
-    DeviceContactSensor(const char * szDeviceName, std::string szLocation);
+    DeviceContactSensor(std::string szDeviceName, std::string szLocation);
     using DeviceCB_fn = std::function<void(DeviceContactSensor *, Changed_t)>;
     DeviceCB_fn mChanged_CB;
 

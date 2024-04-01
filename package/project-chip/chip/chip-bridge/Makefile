@@ -49,7 +49,7 @@ define Build/Configure
 endef
 
 define Build/Compile
-	$(NINJA) -j8 -C $(CHIP_BRIDGE_OUT_DIR) chip-bridge-app
+	$(NINJA) -C $(CHIP_BRIDGE_OUT_DIR) chip-bridge-app
 endef
 
 define Package/chip-bridge/install
