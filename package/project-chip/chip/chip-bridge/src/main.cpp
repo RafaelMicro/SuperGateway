@@ -24,6 +24,7 @@
 #include <app-common/zap-generated/ids/Clusters.h>
 #include <app-common/zap-generated/attribute-type.h>
 #include <app-common/zap-generated/attributes/Accessors.h>
+#include <platform/CHIPDeviceLayer.h>
 #include <app/ConcreteAttributePath.h>
 #include <app/EventLogging.h>
 #include <app/reporting/reporting.h>
@@ -40,17 +41,18 @@
 #include <setup_payload/QRCodeSetupPayloadGenerator.h>
 #include <setup_payload/SetupPayload.h>
 
-// #include <pthread.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
-#include <semaphore.h>
 #include <time.h>
 #include <signal.h>
 #include <thread>
 #include <chrono>
-// #include <semaphore>
+#include <semaphore>
 #include <queue>
 #include <vector>
+#include <functional>
+#include <cstdio>
+#include <atomic>
 
 #include "CommissionableInit.h"
 #include "Device.h"
@@ -93,29 +95,29 @@ using namespace chip::app::Clusters;
 
 struct _EndPoint
 {
-    unsigned char ep;
-    unsigned short devidId;
-    unsigned short clusterCounts;
-    unsigned short clusterID[ClusterIDMax];
+    uint8_t ep;
+    uint16_t devidId;
+    uint16_t clusterCounts;
+    uint16_t clusterID[ClusterIDMax];
 };
 
 struct _EndDevice
 {
-    unsigned char  MacAddress[8];   //Mac Address(64bits)
-    unsigned char  Active;
-    unsigned short ShortAddress;    //Short Address(16bits)
-    unsigned char ep_counts;
+    uint8_t  MacAddress[8];   //Mac Address(64bits)
+    uint8_t  Active;
+    uint16_t ShortAddress;    //Short Address(16bits)
+    uint8_t ep_counts;
     struct _EndPoint ep_list[EndPointMax];
 };
 
 struct _Coordinator
 {
-    unsigned char  MacAddress[8];   //Mac Address(64bits)
-    unsigned short PANID;
-    unsigned short DevCount;
-    unsigned short ARCount;
-    unsigned char  CHANNEL;
-    unsigned char  EXT_PAN_ID[8];
+    uint8_t  MacAddress[8];   //Mac Address(64bits)
+    uint16_t PANID;
+    uint16_t DevCount;
+    uint16_t ARCount;
+    uint8_t  CHANNEL;
+    uint8_t  EXT_PAN_ID[8];
 };
 
 typedef struct _MatterEndDevice
@@ -124,13 +126,13 @@ typedef struct _MatterEndDevice
     ClusterId   clusterId;
     AttributeId attributeId;
     // _EndDevice  ED;
-    unsigned char ep;
-    unsigned short ShortAddress;
+    uint8_t ep;
+    uint16_t ShortAddress;
 } _MatterEndDevice_t;
 
 typedef struct gw_command
 {
-    unsigned char buffer[1024];
+    uint8_t buffer[1024];
     int len;
 } gw_command_t;
 
@@ -142,11 +144,26 @@ typedef struct ias_zone_notify
 
 std::queue<gw_command_t> gw_rx_command_queue;
 std::queue<gw_command_t> gw_tx_command_queue;
-std::queue<gw_command_t> gw_tx_response_queue;
+std::queue<gw_command_t> gw_read_response_queue;
 
 std::vector<_MatterEndDevice_t> bridge_device;
 
-sem_t wait_tx_sem, read_attribute_sem;
+std::binary_semaphore wait_tx_sem {1};
+// std::binary_semaphore read_attribute_sem {0};
+
+typedef struct binary_semaphore
+{
+    std::binary_semaphore sem;
+
+    // constexpr default_binary_semaphore() : sem (0) {}
+    constexpr explicit binary_semaphore(auto count) : sem(count) {}
+} binary_semaphore_t;
+
+binary_semaphore_t *read_attribute_sem[20];
+
+// int read_attribute_sem_count = 0;
+
+// std::function<void(intptr_t)> read_attr_cb;
 
 struct _EndDevice ED[EndDeviceMax];
 struct _Coordinator CR;
@@ -157,11 +174,12 @@ const char Coordinator_Filename[] = "/usr/local/var/lib/ez-zbgw/zbdb/sc_coordina
 
 // int light_id = 0;
 int device_index = 0;
+bool timeout = false;
 bool add_ep = false;
 int sockfd = 0;
 timer_t *tid;
 
-DeviceOnOff *Light[EndDeviceMax];
+DeviceLight *Light[EndDeviceMax];
 DeviceTempSensor *TempSensor[EndDeviceMax];
 DeviceContactSensor *ContactSensor[EndDeviceMax];
 
@@ -182,12 +200,15 @@ const int16_t minMeasuredValue     = -27315;
 const int16_t maxMeasuredValue     = 32766;
 const int16_t initialMeasuredValue = 2100;
 
-#define DEVICE_TYPE_BRIDGED_NODE    0x0013
-#define DEVICE_TYPE_CONTACT_SENSOR  0x0015
-#define DEVICE_TYPE_LO_ON_OFF_LIGHT 0x0100
-#define DEVICE_TYPE_POWER_SOURCE    0x0011
-#define DEVICE_TYPE_TEMP_SENSOR     0x0302
-#define DEVICE_VERSION_DEFAULT      1
+#define DEVICE_TYPE_BRIDGED_NODE          0x0013
+#define DEVICE_TYPE_CONTACT_SENSOR        0x0015
+#define DEVICE_TYPE_LO_ON_OFF_LIGHT       0x0100
+#define DEVICE_TYPE_DIMMABLE_LIGHT        0x0101
+#define DEVICE_TYPE_COLOR_TEMP_LIGHT      0x010C
+#define DEVICE_TYPE_EXTENDED_COLOR_LIGHT  0x010D
+#define DEVICE_TYPE_POWER_SOURCE          0x0011
+#define DEVICE_TYPE_TEMP_SENSOR           0x0302
+#define DEVICE_VERSION_DEFAULT            1
 
 // Declare Descriptor cluster attributes
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(descriptorAttrs)
@@ -210,6 +231,93 @@ DECLARE_DYNAMIC_ATTRIBUTE(TemperatureMeasurement::Attributes::MinMeasuredValue::
 DECLARE_DYNAMIC_ATTRIBUTE(TemperatureMeasurement::Attributes::MaxMeasuredValue::Id, INT16S, 2, 0), /* Max Measured Value */
 DECLARE_DYNAMIC_ATTRIBUTE(TemperatureMeasurement::Attributes::FeatureMap::Id, BITMAP32, 4, 0),     /* FeatureMap */
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+// Declare On/Off cluster attributes
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(onOffAttrs)
+DECLARE_DYNAMIC_ATTRIBUTE(OnOff::Attributes::OnOff::Id, BOOLEAN, 1, 0), /* on/off */
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(levelAttrs)
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::LevelControl::Attributes::CurrentLevel::Id, INT8U, 1, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::LevelControl::Attributes::MinLevel::Id, INT8U, 1, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::LevelControl::Attributes::MaxLevel::Id, INT8U, 1, 0),
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(colorTemperatureAttrs)
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::CurrentHue::Id, INT8U, 1, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::CurrentSaturation::Id, INT8U, 1, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorTemperatureMireds::Id, INT16U, 2, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::RemainingTime::Id, INT16U, 2, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorMode::Id, ENUM8, 1, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorTempPhysicalMinMireds::Id, INT16U, 2, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorTempPhysicalMaxMireds::Id, INT16U, 2, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::StartUpColorTemperatureMireds::Id, INT16U, 2, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorCapabilities::Id, BITMAP16, 2, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::FeatureMap::Id, BITMAP32, 4, 0),     /* FeatureMap */
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+//DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(extendedLightAttrs)
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::CurrentHue::Id, INT8U, 1, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::CurrentSaturation::Id, INT8U, 1, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorTemperatureMireds::Id, INT16U, 2, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::RemainingTime::Id, INT16U, 2, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorMode::Id, ENUM8, 1, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorTempPhysicalMinMireds::Id, INT16U, 2, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorTempPhysicalMaxMireds::Id, INT16U, 2, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::StartUpColorTemperatureMireds::Id, INT16U, 2, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::ColorCapabilities::Id, BITMAP16, 2, 0),
+//DECLARE_DYNAMIC_ATTRIBUTE(Clusters::ColorControl::Attributes::FeatureMap::Id, BITMAP32, 4, 0),     /* FeatureMap */
+//DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+// Declare On/Off cluster attributes
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(booleanAttrs)
+DECLARE_DYNAMIC_ATTRIBUTE(BooleanState::Attributes::StateValue::Id, BOOLEAN, 1, 0),
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+constexpr CommandId onOffIncomingCommands[] = {
+    app::Clusters::OnOff::Commands::Off::Id,
+    app::Clusters::OnOff::Commands::On::Id,
+    app::Clusters::OnOff::Commands::Toggle::Id,
+    app::Clusters::OnOff::Commands::OffWithEffect::Id,
+    app::Clusters::OnOff::Commands::OnWithRecallGlobalScene::Id,
+    app::Clusters::OnOff::Commands::OnWithTimedOff::Id,
+    kInvalidCommandId,
+};
+
+constexpr CommandId levelIncomingCommands[] = {
+    app::Clusters::LevelControl::Commands::MoveToLevel::Id,
+    app::Clusters::LevelControl::Commands::Move::Id,
+    app::Clusters::LevelControl::Commands::Step::Id,
+    app::Clusters::LevelControl::Commands::Stop::Id,
+    app::Clusters::LevelControl::Commands::MoveToLevelWithOnOff::Id,
+    app::Clusters::LevelControl::Commands::StepWithOnOff::Id,
+    app::Clusters::LevelControl::Commands::StopWithOnOff::Id,
+    app::Clusters::LevelControl::Commands::MoveToClosestFrequency::Id,
+    kInvalidCommandId,
+};
+
+constexpr CommandId colorTemperatureIncomingCommands[] = {
+    app::Clusters::ColorControl::Commands::MoveToHue::Id,
+    app::Clusters::ColorControl::Commands::MoveHue::Id,
+    app::Clusters::ColorControl::Commands::StepHue::Id,
+    app::Clusters::ColorControl::Commands::MoveToSaturation::Id,
+    app::Clusters::ColorControl::Commands::MoveSaturation::Id,
+    app::Clusters::ColorControl::Commands::StepSaturation::Id,
+    app::Clusters::ColorControl::Commands::MoveToHueAndSaturation::Id,
+    app::Clusters::ColorControl::Commands::MoveToColor::Id,
+    app::Clusters::ColorControl::Commands::MoveColor::Id,
+    app::Clusters::ColorControl::Commands::StepColor::Id,
+    app::Clusters::ColorControl::Commands::MoveToColorTemperature::Id,
+    app::Clusters::ColorControl::Commands::EnhancedMoveToHue::Id,
+    app::Clusters::ColorControl::Commands::EnhancedMoveHue::Id,
+    app::Clusters::ColorControl::Commands::EnhancedStepHue::Id,
+    app::Clusters::ColorControl::Commands::EnhancedMoveToHueAndSaturation::Id,
+    app::Clusters::ColorControl::Commands::ColorLoopSet::Id,
+    app::Clusters::ColorControl::Commands::StopMoveStep::Id,
+    app::Clusters::ColorControl::Commands::MoveColorTemperature::Id,
+    app::Clusters::ColorControl::Commands::StepColorTemperature::Id,          
+    kInvalidCommandId,
+};
 
 // ---------------------------------------------------------------------------
 //
@@ -237,20 +345,6 @@ const EmberAfDeviceType gBridgedTempSensorDeviceTypes[] = { { DEVICE_TYPE_TEMP_S
 //   - Descriptor
 //   - Bridged Device Basic Information
 
-// Declare On/Off cluster attributes
-DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(onOffAttrs)
-DECLARE_DYNAMIC_ATTRIBUTE(OnOff::Attributes::OnOff::Id, BOOLEAN, 1, 0), /* on/off */
-DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
-
-constexpr CommandId onOffIncomingCommands[] = {
-    app::Clusters::OnOff::Commands::Off::Id,
-    app::Clusters::OnOff::Commands::On::Id,
-    app::Clusters::OnOff::Commands::Toggle::Id,
-    app::Clusters::OnOff::Commands::OffWithEffect::Id,
-    app::Clusters::OnOff::Commands::OnWithRecallGlobalScene::Id,
-    app::Clusters::OnOff::Commands::OnWithTimedOff::Id,
-    kInvalidCommandId,
-};
 
 DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(bridgedLightClusters)
 DECLARE_DYNAMIC_CLUSTER(OnOff::Id, onOffAttrs, onOffIncomingCommands, nullptr),
@@ -263,8 +357,55 @@ DECLARE_DYNAMIC_ENDPOINT(bridgedLightEndpoint, bridgedLightClusters);
 DataVersion gLightDataVersions[ArraySize(bridgedLightClusters)];
 
 const EmberAfDeviceType gBridgedOnOffDeviceTypes[] = { { DEVICE_TYPE_LO_ON_OFF_LIGHT, DEVICE_VERSION_DEFAULT },
-                                                        { DEVICE_TYPE_BRIDGED_NODE, DEVICE_VERSION_DEFAULT } };
+                                                       { DEVICE_TYPE_BRIDGED_NODE, DEVICE_VERSION_DEFAULT } };
 
+
+// ---------------------------------------------------------------------------
+//
+// DIMMING ENDPOINT: contains the following clusters:
+//   - On/Off
+//   - Level
+//   - Descriptor
+//   - Bridged Device Basic Information
+
+DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(bridgedDimmingClusters)
+DECLARE_DYNAMIC_CLUSTER(OnOff::Id, onOffAttrs, onOffIncomingCommands, nullptr),
+DECLARE_DYNAMIC_CLUSTER(LevelControl::Id, levelAttrs, levelIncomingCommands, nullptr),
+DECLARE_DYNAMIC_CLUSTER(Descriptor::Id, descriptorAttrs, nullptr, nullptr),
+DECLARE_DYNAMIC_CLUSTER(BridgedDeviceBasicInformation::Id, bridgedDeviceBasicAttrs, nullptr, nullptr)
+DECLARE_DYNAMIC_CLUSTER_LIST_END;
+
+// Declare Bridged Light endpoint
+DECLARE_DYNAMIC_ENDPOINT(bridgedDimmingEndpoint, bridgedDimmingClusters);
+DataVersion gDimmingDataVersions[ArraySize(bridgedDimmingClusters)];
+
+const EmberAfDeviceType gBridgedDimmingDeviceTypes[] = { { DEVICE_TYPE_DIMMABLE_LIGHT, DEVICE_VERSION_DEFAULT },
+                                                         { DEVICE_TYPE_BRIDGED_NODE, DEVICE_VERSION_DEFAULT } };
+
+
+// ---------------------------------------------------------------------------
+//
+// CT ENDPOINT: contains the following clusters:
+//   - On/Off
+//   - Level
+//   - Color Temperature
+//   - Descriptor
+//   - Bridged Device Basic Information
+
+DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(bridgedColorTemperatureClusters)
+DECLARE_DYNAMIC_CLUSTER(OnOff::Id, onOffAttrs, onOffIncomingCommands, nullptr),
+DECLARE_DYNAMIC_CLUSTER(LevelControl::Id, levelAttrs, levelIncomingCommands, nullptr),
+DECLARE_DYNAMIC_CLUSTER(ColorControl::Id, colorTemperatureAttrs, colorTemperatureIncomingCommands, nullptr),
+DECLARE_DYNAMIC_CLUSTER(Descriptor::Id, descriptorAttrs, nullptr, nullptr),
+DECLARE_DYNAMIC_CLUSTER(BridgedDeviceBasicInformation::Id, bridgedDeviceBasicAttrs, nullptr, nullptr)
+DECLARE_DYNAMIC_CLUSTER_LIST_END;
+
+// Declare Bridged Light endpoint
+DECLARE_DYNAMIC_ENDPOINT(bridgedColorTemperatureEndpoint, bridgedColorTemperatureClusters);
+DataVersion gColorTemperatureDataVersions[ArraySize(bridgedColorTemperatureClusters)];
+
+const EmberAfDeviceType gBridgedColorTemperatureDeviceTypes[] = { { DEVICE_TYPE_COLOR_TEMP_LIGHT, DEVICE_VERSION_DEFAULT },
+                                                                  { DEVICE_TYPE_BRIDGED_NODE, DEVICE_VERSION_DEFAULT } };
 
 // ---------------------------------------------------------------------------
 //
@@ -272,11 +413,6 @@ const EmberAfDeviceType gBridgedOnOffDeviceTypes[] = { { DEVICE_TYPE_LO_ON_OFF_L
 //   - Boolean
 //   - Descriptor
 //   - Bridged Device Basic Information
-
-// Declare On/Off cluster attributes
-DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(booleanAttrs)
-DECLARE_DYNAMIC_ATTRIBUTE(BooleanState::Attributes::StateValue::Id, BOOLEAN, 1, 0),
-DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
 
 DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(bridgedContactSensorClusters)
 DECLARE_DYNAMIC_CLUSTER(BooleanState::Id, booleanAttrs, nullptr, nullptr),
@@ -293,11 +429,35 @@ const EmberAfDeviceType gBridgedContactSensorDeviceTypes[] = { { DEVICE_TYPE_CON
 
 namespace {
 
+static void gw_cmd_transmit(uint8_t *cmd, int len)
+{
+    uint8_t checksum = 0;
+
+    for (int i = 0; i < cmd[4]; i++)
+    {
+        checksum += cmd[4 + i];
+    }
+    cmd[len - 1] = ~checksum;
+
+    // printf(LIGHT_RED"send command: ");
+    // for (int i = 0; i < len; i++)
+    // {
+    //     printf("%02x ", cmd[i]);
+    // }
+    // printf(NONE"\r\n");
+
+    gw_command_t queue;
+
+    queue.len = len;
+    memcpy(queue.buffer, cmd, queue.len);
+    gw_tx_command_queue.push(queue);
+    free(cmd);
+}
+
 static void gw_cmd_read_attr_req(intptr_t arg)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
 
     auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
 
@@ -308,8 +468,7 @@ static void gw_cmd_read_attr_req(intptr_t arg)
     Platform::Delete(path);
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
-
-    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF,
+    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF,
                            0x0C,
                            0x00, 0x00, 0x02, 0x00,
                            0x00, 0x00,
@@ -317,44 +476,80 @@ static void gw_cmd_read_attr_req(intptr_t arg)
                            0x00, 0x00,
                            0x00, 0x00,
                            0x00};
+    uint8_t *pCmd = (uint8_t *)malloc(sizeof(uint8_t) * sizeof(cmd));
 
-    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF);
-    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    cmd[9] = (uint8_t)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (uint8_t)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
     cmd[12] = bridge_device[endpointIndex].ep;
-    cmd[13] = (unsigned char)(clusterId & 0xFF);
-    cmd[14] = (unsigned char)((clusterId >> 8) & 0xFF);
-    cmd[15] = (unsigned char)(attributeId & 0xFF);
-    cmd[16] = (unsigned char)((attributeId >> 8) & 0xFF);
+    cmd[13] = (uint8_t)(clusterId & 0xFF);
+    cmd[14] = (uint8_t)((clusterId >> 8) & 0xFF);
+    cmd[15] = (uint8_t)(attributeId & 0xFF);
+    cmd[16] = (uint8_t)((attributeId >> 8) & 0xFF);
+    
+    memcpy(pCmd, cmd, sizeof(cmd));
 
-    unsigned char checksum = 0;
-
-    for (int i = 0; i < cmd[4]; i++)
-    {
-        checksum += cmd[4 + 1 + i];
-    }
-    cmd[sizeof(cmd) - 1] = ~checksum;
-
-    printf(LIGHT_RED"send command: ");
-    for (unsigned long i = 0; i < sizeof(cmd); i++)
-    {
-        printf("%02x ", cmd[i]);
-    }
-    printf(NONE"\r\n");
-
-    gw_command_t queue;
-
-    queue.len = sizeof(cmd);
-    memcpy(queue.buffer, cmd, queue.len);
-
-    // sem_wait(&wait_tx_sem);
-    gw_tx_command_queue.push(queue);
+    gw_cmd_transmit(pCmd, sizeof(cmd));
 }
 
-static void gw_cmd_onoff_on_req(intptr_t arg)
+static void timerCallback(System::Layer *, void * callbackContext)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
+    wait_tx_sem.release();
+    read_attribute_sem[0]->sem.release();
+    delete read_attribute_sem[0];
+    timeout = true;
+}
+
+static bool gw_cmd_read_req(uint8_t *buffer, intptr_t path, uint16_t size)
+{
+    do
+    {
+        timeout = false;
+        gw_cmd_read_attr_req(reinterpret_cast<intptr_t>(path));
+
+        CHIP_ERROR err = DeviceLayer::SystemLayer().StartTimer(
+                chip::System::Clock::Milliseconds32(5000), timerCallback, nullptr);
+
+        if (err != CHIP_NO_ERROR)
+        {
+            printf(LIGHT_RED"Start timer error");
+            printf(NONE"\r\n");
+        }
+        read_attribute_sem[0] = new binary_semaphore_t(0);
+        read_attribute_sem[0]->sem.acquire();
+        // read_attribute_sem_count++;
+        if (!timeout)
+        {
+            // printf(LIGHT_RED"recv done");
+            // printf(NONE"\r\n");
+            DeviceLayer::SystemLayer().CancelTimer(timerCallback, nullptr);
+        }
+        if (!gw_read_response_queue.empty())
+        {
+            gw_command_t resp = gw_read_response_queue.front();
+
+            memcpy(buffer, &resp.buffer[19], size);
+            gw_read_response_queue.pop();
+        }
+        else
+        {
+            return false;
+        }
+    } while (0);  
+
+    return true;
+}
+
+// static void gw_cmd_read_attr_resp(uint8_t *buffer, gw_command_t resp, uint8_t size)
+// {
+//     uint8_t resp[10] = {0};
+
+//     memcpy(buffer, &resp.buffer[19], size);
+// }
+
+static void gw_cmd_onoff_req(intptr_t arg, uint8_t OnOff)
+{
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
 
     auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
 
@@ -365,42 +560,23 @@ static void gw_cmd_onoff_on_req(intptr_t arg)
     Platform::Delete(path);
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
+    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0xFF, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00};
+    uint8_t *pCmd = (uint8_t *)malloc(sizeof(uint8_t) * sizeof(cmd));
 
-    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x01, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00};
-
-    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF);
-    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    cmd[5] = (uint8_t)OnOff;
+    cmd[9] = (uint8_t)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (uint8_t)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
     cmd[12] = bridge_device[endpointIndex].ep;
 
-    unsigned char checksum = 0;
+    memcpy(pCmd, cmd, sizeof(cmd));
 
-    for (int i = 0; i < cmd[4]; i++)
-    {
-        checksum += cmd[4 + 1 + i];
-    }
-    cmd[sizeof(cmd) - 1] = ~checksum;
-
-    printf(LIGHT_RED"send command: ");
-    for (unsigned long i = 0; i < sizeof(cmd); i++)
-    {
-        printf("%02x ", cmd[i]);
-    }
-    printf(NONE"\r\n");
-
-    gw_command_t queue;
-
-    queue.len = sizeof(cmd);
-    memcpy(queue.buffer, cmd, queue.len);
-
-    // sem_wait(&wait_tx_sem);
-    gw_tx_command_queue.push(queue);
+    gw_cmd_transmit(pCmd, sizeof(cmd));
 }
 
-static void gw_cmd_onoff_off_req(intptr_t arg)
+static void gw_cmd_move_to_level_req(intptr_t arg, uint8_t level)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
 
     auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
 
@@ -411,35 +587,99 @@ static void gw_cmd_onoff_off_req(intptr_t arg)
     Platform::Delete(path);
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
-
-    unsigned char cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x09, 0x00, 0x00, 0x07, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00};
-
-    cmd[9] = (unsigned char)(bridge_device[endpointIndex].ShortAddress & 0xFF);
-    cmd[10] = (unsigned char)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x0C, 0x00, 0x00, 0x09, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00};
+    uint8_t *pCmd = (uint8_t *)malloc(sizeof(uint8_t) * sizeof(cmd));
+    
+    cmd[9] = (uint8_t)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (uint8_t)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
     cmd[12] = bridge_device[endpointIndex].ep;
+    cmd[14] = level;
 
-    unsigned char checksum = 0;
+    memcpy(pCmd, cmd, sizeof(cmd));
 
-    for (int i = 0; i < cmd[4]; i++)
-    {
-        checksum += cmd[4 + 1 + i];
-    }
-    cmd[sizeof(cmd) - 1] = ~checksum;
+    gw_cmd_transmit(pCmd, sizeof(cmd));
+}
 
-    printf(LIGHT_RED"send command: ");
-    for (unsigned long i = 0; i < sizeof(cmd); i++)
-    {
-        printf("%02x ", cmd[i]);
-    }
-    printf(NONE"\r\n");
+static void gw_cmd_move_to_hue_req(intptr_t arg, uint8_t hue)
+{
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
 
-    gw_command_t queue;
+    auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
 
-    queue.len = sizeof(cmd);
-    memcpy(queue.buffer, cmd, queue.len);
+    EndpointId endpoint     = path->mEndpointId;
+    // ClusterId clusterId     = path->mClusterId;
+    // AttributeId attributeId = path->mAttributeId;
 
-    // sem_wait(&wait_tx_sem);
-    gw_tx_command_queue.push(queue);
+    Platform::Delete(path);
+
+    uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
+    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x0D, 0x00, 0x00, 0x21, 0x00, 0xFF, 0xFF ,0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00};
+    uint8_t *pCmd = (uint8_t *)malloc(sizeof(uint8_t) * sizeof(cmd));
+    
+    cmd[9] = (uint8_t)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (uint8_t)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    cmd[12] = bridge_device[endpointIndex].ep;
+    cmd[14] = hue;
+
+    memcpy(pCmd, cmd, sizeof(cmd));
+
+    gw_cmd_transmit(pCmd, sizeof(cmd));
+}
+
+static void gw_cmd_move_to_saturation_req(intptr_t arg, uint8_t saturation)
+{
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+
+    auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
+
+    EndpointId endpoint     = path->mEndpointId;
+    // ClusterId clusterId     = path->mClusterId;
+    // AttributeId attributeId = path->mAttributeId;
+
+    Platform::Delete(path);
+
+    uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
+    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x0D, 0x03, 0x00, 0x21, 0x00, 0xFF, 0xFF ,0x00, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00};
+    uint8_t *pCmd = (uint8_t *)malloc(sizeof(uint8_t) * sizeof(cmd));
+    
+    cmd[9] = (uint8_t)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (uint8_t)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    cmd[12] = bridge_device[endpointIndex].ep;
+    cmd[14] = saturation;
+
+    memcpy(pCmd, cmd, sizeof(cmd));
+
+    gw_cmd_transmit(pCmd, sizeof(cmd));
+}
+
+static void gw_cmd_move_to_color_temperature_req(intptr_t arg, uint16_t Mireds)
+{
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+
+    auto path = reinterpret_cast<app::ConcreteAttributePath *>(arg);
+
+    EndpointId endpoint     = path->mEndpointId;
+    // ClusterId clusterId     = path->mClusterId;
+    // AttributeId attributeId = path->mAttributeId;
+
+    Platform::Delete(path);
+
+    uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(endpoint);
+    uint8_t cmd[] = {0xFF, 0xFC, 0xFC, 0xFF, 0x0D, 0x0A, 0x00, 0x21, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00};
+    uint8_t *pCmd = (uint8_t *)malloc(sizeof(uint8_t) * sizeof(cmd));
+    
+    cmd[9] = (uint8_t)(bridge_device[endpointIndex].ShortAddress & 0xFF);
+    cmd[10] = (uint8_t)((bridge_device[endpointIndex].ShortAddress >> 8) & 0xFF);
+    cmd[12] = bridge_device[endpointIndex].ep;
+    cmd[14] = (uint8_t)(Mireds & 0xFF);
+	cmd[15] = (uint8_t)(Mireds >> 8);
+
+    memcpy(pCmd, cmd, sizeof(cmd));
+
+    gw_cmd_transmit(pCmd, sizeof(cmd));
 }
 
 void MatterReportingAttributeChangeCallback(const ConcreteAttributePath & aPath)
@@ -448,14 +688,12 @@ void MatterReportingAttributeChangeCallback(const ConcreteAttributePath & aPath)
     // ClusterId clusterId     = aPath.mClusterId;
     // AttributeId attributeId = aPath.mAttributeId;
 
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
 }
 
 void CallReportingCallback(intptr_t closure)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     auto path = reinterpret_cast<app::ConcreteAttributePath *>(closure);
@@ -465,7 +703,6 @@ void CallReportingCallback(intptr_t closure)
 
 void ScheduleReportingCallback(Device * dev, ClusterId cluster, AttributeId attribute)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), cluster, attribute);
@@ -476,7 +713,6 @@ void ScheduleReportingCallback(Device * dev, ClusterId cluster, AttributeId attr
 
 void HandleDeviceStatusChanged(Device * dev, Device::Changed_t itemChangedMask)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     if (itemChangedMask & Device::kChanged_Reachable)
@@ -489,42 +725,99 @@ void HandleDeviceStatusChanged(Device * dev, Device::Changed_t itemChangedMask)
     }
 }
 
-void HandleDeviceOnOffStatusChanged(DeviceOnOff * dev, DeviceOnOff::Changed_t itemChangedMask)
+void HandleDeviceLightStatusChanged(DeviceLight * dev, DeviceLight::Changed_t itemChangedMask)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-    if (itemChangedMask & (DeviceOnOff::kChanged_Reachable | DeviceOnOff::kChanged_Name | DeviceOnOff::kChanged_Location))
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+            
+    // uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId());
+
+    if (itemChangedMask & (DeviceLight::kChanged_Reachable | DeviceLight::kChanged_Name | DeviceLight::kChanged_Location))
     {
         HandleDeviceStatusChanged(static_cast<Device *>(dev), (Device::Changed_t) itemChangedMask);
     }
-    if (itemChangedMask & DeviceOnOff::kChanged_OnOff)
+    if (itemChangedMask & DeviceLight::kChanged_OnOff)
     {
-        ScheduleReportingCallback(dev, OnOff::Id, OnOff::Attributes::OnOff::Id);
+        // ScheduleReportingCallback(dev, OnOff::Id, OnOff::Attributes::OnOff::Id);
 
         auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), OnOff::Id, OnOff::Attributes::OnOff::Id);
         // PlatformMgr().ScheduleWork(HandleZigbeeGatewayRequestCallback, reinterpret_cast<intptr_t>(path));
         // EndpointId endpoint     = dev->GetEndpointId();
         // ClusterId clusterId     = OnOff::Id;
         // AttributeId attributeId = OnOff::Attributes::OnOff::Id;
-        uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId());
 
-        sem_wait(&wait_tx_sem);
-        if (Light[endpointIndex]->IsOn() && Light[endpointIndex]->IsReachable())
-        {
-            gw_cmd_onoff_on_req(reinterpret_cast<intptr_t>(path));
-        }
-        else
-        {
-            gw_cmd_onoff_off_req(reinterpret_cast<intptr_t>(path));
-        }
+        printf(LIGHT_RED"OnOff Changed: %d", dev->IsOn());
         printf(NONE"\r\n");
+
+        if (dev->IsReachable())
+        {
+            wait_tx_sem.acquire();
+            gw_cmd_onoff_req(reinterpret_cast<intptr_t>(path), dev->IsOn());
+        }
+    }
+    else if (itemChangedMask & DeviceLight::kChanged_CurrentLevel)
+    {
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), LevelControl::Id, LevelControl::Attributes::CurrentLevel::Id);
+
+        printf(LIGHT_RED"CurrentLevel Changed: %d", dev->GetCurrentLevel());
+        printf(NONE"\r\n");
+        if (dev->IsReachable())
+        {
+    	    wait_tx_sem.acquire();
+    	    gw_cmd_move_to_level_req(reinterpret_cast<intptr_t>(path), dev->GetCurrentLevel());
+        }
+    }
+    else if (itemChangedMask & DeviceLight::kChanged_CurrentHue)
+    {
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), ColorControl::Id, ColorControl::Attributes::CurrentHue::Id);
+
+        printf(LIGHT_RED"CurrentHue Changed: %d", dev->GetCurrentHue());
+        printf(NONE"\r\n");
+        if (dev->IsReachable())
+        {
+    	    wait_tx_sem.acquire();
+    	    gw_cmd_move_to_hue_req(reinterpret_cast<intptr_t>(path), dev->GetCurrentHue());
+        }
+    }
+    else if (itemChangedMask & DeviceLight::kChanged_CurrentSaturation)
+    {
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), ColorControl::Id, ColorControl::Attributes::CurrentSaturation::Id);
+
+        printf(LIGHT_RED"CurrentSaturation Changed: %d", dev->GetCurrentSaturation());
+        printf(NONE"\r\n");
+        if (dev->IsReachable())
+        {
+    	    wait_tx_sem.acquire();
+    	    gw_cmd_move_to_saturation_req(reinterpret_cast<intptr_t>(path), dev->GetCurrentSaturation());
+        }
+    }
+    else if (itemChangedMask & DeviceLight::kChanged_ColorTemperatureMireds)
+    {
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), ColorControl::Id, ColorControl::Attributes::ColorTemperatureMireds::Id);
+
+        printf(LIGHT_RED"ColorTemperatureMireds Changed: %d", dev->GetColorTemperatureMireds());
+        printf(NONE"\r\n");
+        if (dev->IsReachable())
+        {
+    	    wait_tx_sem.acquire();
+    	    gw_cmd_move_to_color_temperature_req(reinterpret_cast<intptr_t>(path), dev->GetColorTemperatureMireds());
+        }
+    }
+    else if (itemChangedMask & DeviceLight::kChanged_ColorMode)
+    {
+        // auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(), ColorControl::Id, ColorControl::Attributes::ColorMode::Id);
+        printf(LIGHT_RED"ColorMode Changed: %d", dev->GetColorMode());
+        printf(NONE"\r\n");
+        if (dev->IsReachable())
+        {
+    	    // wait_tx_sem.acquire();
+    	    // gw_cmd_move_to_color_temperature_req(reinterpret_cast<intptr_t>(path), dev->GetColorTemperatureMireds());
+        }
     }
 }
 
 void HandleDeviceConatactSensorStatusChanged(DeviceContactSensor * dev, DeviceContactSensor::Changed_t itemChangedMask)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     // if (itemChangedMask &
@@ -540,7 +833,6 @@ void HandleDeviceConatactSensorStatusChanged(DeviceContactSensor * dev, DeviceCo
 
 void HandleDeviceTempSensorStatusChanged(DeviceTempSensor * dev, DeviceTempSensor::Changed_t itemChangedMask)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     if (itemChangedMask &
@@ -557,7 +849,6 @@ void HandleDeviceTempSensorStatusChanged(DeviceTempSensor * dev, DeviceTempSenso
 int AddDeviceEndpoint(Device * dev, EmberAfEndpointType * ep, const Span<const EmberAfDeviceType> & deviceTypeList,
                       const Span<DataVersion> & dataVersionStorage, chip::EndpointId parentEndpointId = chip::kInvalidEndpointId)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     uint8_t index = 0;
@@ -634,7 +925,7 @@ void Check_Dev_Info()
             for (k = 0; k < ED[i].ep_list[j].clusterCounts; k++)
             {
                 ChipLogProgress(DeviceLayer, "0x%04X", ED[i].ep_list[j].clusterID[k]);
-                if (ED[i].ep_list[j].clusterID[k] == OnOff::Id ||
+                if (ED[i].ep_list[j].clusterID[k] == ColorControl::Id ||
                     ED[i].ep_list[j].clusterID[k] == TemperatureMeasurement::Id ||
                     ED[i].ep_list[j].clusterID[k] == 0x0500)
                 {
@@ -744,7 +1035,6 @@ void Open_Socket()
 
 void ChipEventHandler(const ChipDeviceEvent * aEvent, intptr_t /* arg */)
 {
-    // ChipLogProgress(NotSpecified, "ChipEventHandler: %x", aEvent->Type);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
 
@@ -789,19 +1079,28 @@ void ChipEventHandler(const ChipDeviceEvent * aEvent, intptr_t /* arg */)
 // =================================================================================
 
 #define ZCL_DESCRIPTOR_CLUSTER_REVISION (1u)
+
 #define ZCL_BRIDGED_DEVICE_BASIC_INFORMATION_CLUSTER_REVISION (1u)
 #define ZCL_BRIDGED_DEVICE_BASIC_INFORMATION_FEATURE_MAP (0u)
+
 #define ZCL_FIXED_LABEL_CLUSTER_REVISION (1u)
+
 #define ZCL_ON_OFF_CLUSTER_REVISION (4u)
+
+#define ZCL_LEVEL_CLUSTER_REVISION (5u)
+
+#define ZCL_COLOR_TEMPERATURE_CLUSTER_REVISION (5u)
+#define ZCL_COLOR_TEMPERATURE_FEATURE_MAP (17u)
+
 #define ZCL_TEMPERATURE_SENSOR_CLUSTER_REVISION (1u)
 #define ZCL_TEMPERATURE_SENSOR_FEATURE_MAP (0u)
+
 #define ZCL_POWER_SOURCE_CLUSTER_REVISION (2u)
 
 // ---------------------------------------------------------------------------
 
 int RemoveDeviceEndpoint(Device * dev)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     uint8_t index = 0;
@@ -826,7 +1125,6 @@ int RemoveDeviceEndpoint(Device * dev)
 
 std::vector<EndpointListInfo> GetEndpointListInfo(chip::EndpointId parentId)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     std::vector<EndpointListInfo> infoList;
@@ -869,7 +1167,6 @@ std::vector<EndpointListInfo> GetEndpointListInfo(chip::EndpointId parentId)
 
 std::vector<Action *> GetActionListInfo(chip::EndpointId parentId)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     return gActions;
@@ -878,7 +1175,6 @@ std::vector<Action *> GetActionListInfo(chip::EndpointId parentId)
 EmberAfStatus HandleReadBridgedDeviceBasicAttribute(Device * dev, chip::AttributeId attributeId, uint8_t * buffer,
                                                     uint16_t maxReadLength)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     using namespace BridgedDeviceBasicInformation::Attributes;
@@ -912,30 +1208,14 @@ EmberAfStatus HandleReadBridgedDeviceBasicAttribute(Device * dev, chip::Attribut
     return EMBER_ZCL_STATUS_SUCCESS;
 }
 
-static void ReleaseSemaphoreHandler(int sig, siginfo_t *si, void *uc)
-{
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-
-    timer_t *tidptr;
-
-    sem_post(&wait_tx_sem);
-    sem_post(&read_attribute_sem);
-
-    tidptr = (timer_t *)si->si_value.sival_ptr;
-    timer_delete(*tidptr);
-
-    free(tidptr);
-}
-
-EmberAfStatus HandleReadBooleanAttribute(DeviceOnOff * dev,
+EmberAfStatus HandleReadBooleanAttribute(DeviceLight * dev,
                                          chip::AttributeId attributeId,
                                          uint8_t * buffer,
                                          uint16_t maxReadLength)
 {
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-    ChipLogProgress(DeviceLayer, "HandleReadBooleanAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+    // ChipLogProgress(DeviceLayer, "HandleReadBooleanAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId());
 
@@ -946,11 +1226,11 @@ EmberAfStatus HandleReadBooleanAttribute(DeviceOnOff * dev,
     return EMBER_ZCL_STATUS_SUCCESS;
 }
 
-EmberAfStatus HandleWriteBooleanAttribute(DeviceOnOff * dev, chip::AttributeId attributeId, uint8_t * buffer)
+EmberAfStatus HandleWriteBooleanAttribute(DeviceLight * dev, chip::AttributeId attributeId, uint8_t * buffer)
 {
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-    ChipLogProgress(DeviceLayer, "HandleWriteOnOffAttribute: attrId=%d", attributeId);
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+    // ChipLogProgress(DeviceLayer, "HandleWriteBooleanAttribute: attrId=%d", attributeId);
 
     uint16_t endpointIndex  = emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId());
 
@@ -970,85 +1250,105 @@ EmberAfStatus HandleWriteBooleanAttribute(DeviceOnOff * dev, chip::AttributeId a
     return EMBER_ZCL_STATUS_SUCCESS;
 }
 
-EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev,
+EmberAfStatus HandleWriteOnOffAttribute(DeviceLight * dev, chip::AttributeId attributeId, uint8_t * buffer)
+{
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+    // ChipLogProgress(DeviceLayer, "HandleWriteOnOffAttribute: attrId=%d", attributeId);
+
+    if ((attributeId == OnOff::Attributes::OnOff::Id) && (dev->IsReachable()))
+    {
+        bool OnOff;
+
+        OnOff = *buffer ? true : false;
+        dev->SetOnOff(OnOff);
+    }
+    else
+    {
+        return EMBER_ZCL_STATUS_FAILURE;
+    }
+
+    return EMBER_ZCL_STATUS_SUCCESS;
+}
+
+EmberAfStatus HandleWriteLevelControAttribute(DeviceLight * dev, chip::AttributeId attributeId, uint8_t * buffer)
+{
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+    // ChipLogProgress(DeviceLayer, "HandleWriteLevelControAttribute: attrId=%d", attributeId);
+
+    if ((attributeId == LevelControl::Attributes::CurrentLevel::Id) && (dev->IsReachable()))
+    {
+        uint8_t CurrentLevel = buffer[0];
+        dev->SetCurrentLevel(CurrentLevel);
+    }
+    else
+    {
+        return EMBER_ZCL_STATUS_FAILURE;
+    }
+
+    return EMBER_ZCL_STATUS_SUCCESS;
+}
+
+EmberAfStatus HandleWriteColorControlAttribute(DeviceLight * dev, chip::AttributeId attributeId, uint8_t * buffer)
+{
+    // printf(LIGHT_RED"%s, attribute: %d", __FUNCTION__, attributeId);
+    // printf(NONE"\r\n");
+    // ChipLogProgress(DeviceLayer, "HandleWriteColorControAttribute: attrId=%d", attributeId);
+
+    if ((attributeId == ColorControl::Attributes::CurrentHue::Id) && (dev->IsReachable()))
+    {
+        uint8_t CurrentHue = buffer[0];
+        dev->SetCurrentHue(CurrentHue);
+    }
+    else if ((attributeId == ColorControl::Attributes::CurrentSaturation::Id) && (dev->IsReachable()))
+    {
+        uint8_t CurrentSaturation = buffer[0];
+        dev->SetCurrentSaturation(CurrentSaturation);
+    }
+    else if ((attributeId == ColorControl::Attributes::ColorTemperatureMireds::Id) && (dev->IsReachable()))
+    {
+        uint16_t ColorTemperatureMireds = buffer[0] | buffer[1] << 8;
+        dev->SetColorTemperatureMireds(ColorTemperatureMireds);
+    }
+    else if ((attributeId == ColorControl::Attributes::ColorMode::Id) && (dev->IsReachable()))
+    {
+        uint8_t ColorMode = buffer[0];
+        dev->SetColorMode(ColorMode);
+    }
+    else
+    {
+        return EMBER_ZCL_STATUS_FAILURE;
+    }
+
+    return EMBER_ZCL_STATUS_SUCCESS;
+}
+
+EmberAfStatus HandleReadOnOffAttribute(DeviceLight * dev,
                                        chip::AttributeId attributeId,
                                        uint8_t * buffer,
                                        uint16_t maxReadLength)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-    ChipLogProgress(DeviceLayer, "HandleReadOnOffAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+    // ChipLogProgress(DeviceLayer, "HandleReadOnOffAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
 
     if ((attributeId == OnOff::Attributes::OnOff::Id) && (maxReadLength == 1))
     {
-        // *buffer = dev->IsOn() ? 1 : 0;
-
         auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(),
                                                                 OnOff::Id,
                                                                 OnOff::Attributes::OnOff::Id);
-        sem_wait(&wait_tx_sem);
-        gw_cmd_read_attr_req(reinterpret_cast<intptr_t>(path));
-        
-        struct sigevent sev;
-        struct sigaction sa;
-
-        memset(&sev, 0, sizeof(struct sigevent));
-
-        tid = (timer_t *)malloc(sizeof(timer_t));
-
-        sa.sa_flags = SA_SIGINFO;
-        sa.sa_sigaction = ReleaseSemaphoreHandler;
-        sigemptyset(&sa.sa_mask);
-
-        if (sigaction(SIGRTMAX, &sa, NULL) == -1)
+    
+        wait_tx_sem.acquire();
+        if (gw_cmd_read_req(buffer, reinterpret_cast<intptr_t>(path), maxReadLength))
         {
-            return EMBER_ZCL_STATUS_FAILURE;
-        }
+            uint8_t OnOff;
 
-        sev.sigev_notify = SIGEV_SIGNAL;
-        sev.sigev_signo = SIGRTMAX;
-        sev.sigev_value.sival_ptr = tid;
-
-        if (timer_create(CLOCK_REALTIME, &sev, tid) == -1)
-        {
-            return EMBER_ZCL_STATUS_FAILURE;
-        }
-
-        struct itimerspec it;
-        it.it_interval.tv_sec = 1;
-        it.it_interval.tv_nsec = 0;
-        it.it_value.tv_sec = 3;
-        it.it_value.tv_nsec = 0;
-
-        if (timer_settime(*tid, 0, &it, NULL) == -1)
-        {
-            return EMBER_ZCL_STATUS_FAILURE;
-        }
-
-        sem_wait(&read_attribute_sem);
-        printf(LIGHT_RED"recv done");
-        printf(NONE"\r\n");
-
-        if (!gw_tx_response_queue.empty())
-        {
-            gw_command_t resp = gw_tx_response_queue.front();
-
-            printf(LIGHT_RED"status: %d", resp.buffer[19]);
+            memcpy(&OnOff, buffer, maxReadLength);
+            dev->SetOnOffVal(OnOff);
+            printf(LIGHT_RED"Read OnOff: %d", OnOff);
             printf(NONE"\r\n");
-
-            *buffer = resp.buffer[19];
-            // Light[emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId())]->Set(*buffer);
-            // printf(LIGHT_RED"%d", emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId()));
-            // printf(NONE"\r\n");
-            Light[emberAfGetDynamicIndexFromEndpoint(dev->GetEndpointId())]->Set(*buffer);
-            gw_tx_response_queue.pop();
         }
-        else
-        {
-            return EMBER_ZCL_STATUS_FAILURE;
-        }
-
     }
     else if ((attributeId == OnOff::Attributes::ClusterRevision::Id) && (maxReadLength == 2))
     {
@@ -1063,38 +1363,162 @@ EmberAfStatus HandleReadOnOffAttribute(DeviceOnOff * dev,
     return EMBER_ZCL_STATUS_SUCCESS;
 }
 
-EmberAfStatus HandleWriteOnOffAttribute(DeviceOnOff * dev, chip::AttributeId attributeId, uint8_t * buffer)
+EmberAfStatus HandleReadLevelControlAttribute(DeviceLight * dev,
+                                              chip::AttributeId attributeId,
+                                              uint8_t * buffer,
+                                              uint16_t maxReadLength)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
-    ChipLogProgress(DeviceLayer, "HandleWriteOnOffAttribute: attrId=%d", attributeId);
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+    // ChipLogProgress(DeviceLayer, "HandleReadLevelControlAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
 
-    if ((attributeId == OnOff::Attributes::OnOff::Id) && (dev->IsReachable()))
+    if ((attributeId == Clusters::LevelControl::Attributes::CurrentLevel::Id) && (maxReadLength == 1))
     {
-        if (*buffer)
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(),
+                                                                LevelControl::Id,
+                                                                LevelControl::Attributes::CurrentLevel::Id);
+
+        wait_tx_sem.acquire();
+        if (gw_cmd_read_req(buffer, reinterpret_cast<intptr_t>(path), maxReadLength))
         {
-            dev->SetOnOff(true);
-        }
-        else
-        {
-            dev->SetOnOff(false);
+            uint8_t CurrentLevel;
+
+            memcpy(&CurrentLevel, buffer, maxReadLength);
+            dev->SetCurrentLevelVal(CurrentLevel);
+            printf(LIGHT_RED"Read CurrentLevel: %d", CurrentLevel);
+            printf(NONE"\r\n");        
         }
     }
-    else
+    else if ((attributeId == Clusters::LevelControl::Attributes::MinLevel::Id) && (maxReadLength == 1))
     {
-        return EMBER_ZCL_STATUS_FAILURE;
+        *buffer = 0x1;
     }
+    else if ((attributeId == Clusters::LevelControl::Attributes::MaxLevel::Id) && (maxReadLength == 1))
+    {
+        *buffer = 0xFE;
+    }
+    return EMBER_ZCL_STATUS_SUCCESS;
+}
 
+EmberAfStatus HandleReadColorControlAttribute(DeviceLight * dev,
+                                              chip::AttributeId attributeId,
+                                              uint8_t * buffer,
+                                              uint16_t maxReadLength)
+{
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
+    // ChipLogProgress(DeviceLayer, "HandleReadColorControlAttribute: attrId=%d, maxReadLength=%d", attributeId, maxReadLength);
+
+    if ((attributeId == Clusters::ColorControl::Attributes::CurrentHue::Id) && (maxReadLength == 1))
+    {
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(),
+                                                                ColorControl::Id,
+                                                                ColorControl::Attributes::CurrentHue::Id);
+        
+        wait_tx_sem.acquire();
+        if (gw_cmd_read_req(buffer, reinterpret_cast<intptr_t>(path), maxReadLength))
+        {
+            uint8_t CurrentHue;
+
+            memcpy(&CurrentHue, buffer, maxReadLength);
+            dev->SetCurrentHueVal(CurrentHue);
+            printf(LIGHT_RED"Read CurrentHue: %d", CurrentHue);
+            printf(NONE"\r\n");        
+        }
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::CurrentSaturation::Id) && (maxReadLength == 1))
+    {
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(),
+                                                                ColorControl::Id,
+                                                                ColorControl::Attributes::CurrentSaturation::Id);
+
+        wait_tx_sem.acquire();
+        if (gw_cmd_read_req(buffer, reinterpret_cast<intptr_t>(path), maxReadLength))
+        {
+            uint8_t CurrentSaturation;
+
+            memcpy(&CurrentSaturation, buffer, maxReadLength);
+            dev->SetCurrentSaturationVal(CurrentSaturation);
+            printf(LIGHT_RED"Read CurrentSaturation: %d", CurrentSaturation);
+            printf(NONE"\r\n");        
+        }
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::ColorTemperatureMireds::Id) && (maxReadLength == 2))
+    {
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(),
+                                                                ColorControl::Id,
+                                                                ColorControl::Attributes::ColorTemperatureMireds::Id);
+
+        wait_tx_sem.acquire();
+        if (gw_cmd_read_req(buffer, reinterpret_cast<intptr_t>(path), maxReadLength))
+        {
+            uint16_t ColorTemperatureMireds;
+
+            memcpy(&ColorTemperatureMireds, buffer, maxReadLength);
+            dev->SetColorTemperatureMiredsVal(ColorTemperatureMireds);
+            printf(LIGHT_RED"Read ColorTemperatureMireds: %d", ColorTemperatureMireds);
+            printf(NONE"\r\n");        
+        }
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::RemainingTime::Id) && (maxReadLength == 2))
+    {
+        uint16_t RemainingTime = 0x0;
+        memcpy(buffer, &RemainingTime, sizeof(RemainingTime));
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::ColorMode::Id) && (maxReadLength == 1))
+    {
+        auto * path = Platform::New<app::ConcreteAttributePath>(dev->GetEndpointId(),
+                                                                ColorControl::Id,
+                                                                ColorControl::Attributes::ColorMode::Id);
+
+        wait_tx_sem.acquire();
+        if (gw_cmd_read_req(buffer, reinterpret_cast<intptr_t>(path), maxReadLength))
+        {
+            uint8_t ColorMode;
+
+            memcpy(&ColorMode, buffer, maxReadLength);
+            printf(LIGHT_RED"Read ColorMode: %d", ColorMode);
+            printf(NONE"\r\n");        
+        }
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::ColorCapabilities::Id) && (maxReadLength == 2))
+    {
+        uint16_t ColorCapabilities = 0x11;
+        memcpy(buffer, &ColorCapabilities, sizeof(ColorCapabilities));
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::ColorTempPhysicalMinMireds::Id) && (maxReadLength == 2))
+    {
+        uint16_t ColorTempPhysicalMinMireds = 153;
+        memcpy(buffer, &ColorTempPhysicalMinMireds, sizeof(ColorTempPhysicalMinMireds));
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::ColorTempPhysicalMaxMireds::Id) && (maxReadLength == 2))
+    {
+        uint16_t ColorTempPhysicalMaxMireds = 370;
+        memcpy(buffer, &ColorTempPhysicalMaxMireds, sizeof(ColorTempPhysicalMaxMireds));
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::StartUpColorTemperatureMireds::Id) && (maxReadLength == 2))
+    {
+        uint16_t StartUpColorTemperatureMireds = 153;
+        memcpy(buffer, &StartUpColorTemperatureMireds, sizeof(StartUpColorTemperatureMireds));
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::FeatureMap::Id) && (maxReadLength == 4))
+    {
+        uint32_t featureMap = ZCL_COLOR_TEMPERATURE_FEATURE_MAP;
+        memcpy(buffer, &featureMap, sizeof(featureMap));
+    }
+    else if ((attributeId == Clusters::ColorControl::Attributes::ClusterRevision::Id) && (maxReadLength == 2))
+    {
+        uint16_t clusterRevision = ZCL_COLOR_TEMPERATURE_CLUSTER_REVISION;
+        memcpy(buffer, &clusterRevision, sizeof(clusterRevision));
+    }
     return EMBER_ZCL_STATUS_SUCCESS;
 }
 
 EmberAfStatus HandleReadTempMeasurementAttribute(DeviceTempSensor * dev, chip::AttributeId attributeId, uint8_t * buffer,
                                                  uint16_t maxReadLength)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
     using namespace TemperatureMeasurement::Attributes;
 
     if ((attributeId == MeasuredValue::Id) && (maxReadLength == 2))
@@ -1134,11 +1558,12 @@ EmberAfStatus emberAfExternalAttributeReadCallback(EndpointId endpoint, ClusterI
                                                    const EmberAfAttributeMetadata * attributeMetadata, uint8_t * buffer,
                                                    uint16_t maxReadLength)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
     uint16_t endpointIndex = emberAfGetDynamicIndexFromEndpoint(endpoint);
-    ChipLogProgress(DeviceLayer, "endpoint: %d, endpointIndex: %d", endpoint, endpointIndex);
+
+    ChipLogProgress(DeviceLayer, "endpoint: %d, index: %d, cluster: %d, attribute: %d", 
+        endpoint, endpointIndex, clusterId, attributeMetadata->attributeId);
 
     EmberAfStatus ret = EMBER_ZCL_STATUS_FAILURE;
 
@@ -1152,7 +1577,15 @@ EmberAfStatus emberAfExternalAttributeReadCallback(EndpointId endpoint, ClusterI
         }
         else if (clusterId == OnOff::Id)
         {
-            ret = HandleReadOnOffAttribute(static_cast<DeviceOnOff *>(dev), attributeMetadata->attributeId, buffer, maxReadLength);
+            ret = HandleReadOnOffAttribute(static_cast<DeviceLight *>(dev), attributeMetadata->attributeId, buffer, maxReadLength);
+        }
+        else if (clusterId == LevelControl::Id)
+        {
+            ret = HandleReadLevelControlAttribute(static_cast<DeviceLight *>(dev), attributeMetadata->attributeId, buffer, maxReadLength);
+        }
+        else if (clusterId == ColorControl::Id)
+        {
+            ret = HandleReadColorControlAttribute(static_cast<DeviceLight *>(dev), attributeMetadata->attributeId, buffer, maxReadLength);     
         }
         else if (clusterId == TemperatureMeasurement::Id)
         {
@@ -1161,7 +1594,7 @@ EmberAfStatus emberAfExternalAttributeReadCallback(EndpointId endpoint, ClusterI
         }
         else if (clusterId == BooleanState::Id)
         {
-            ret = HandleReadBooleanAttribute(static_cast<DeviceOnOff *>(dev), attributeMetadata->attributeId, buffer,
+            ret = HandleReadBooleanAttribute(static_cast<DeviceLight *>(dev), attributeMetadata->attributeId, buffer,
                                                      maxReadLength);
         }
     }
@@ -1178,7 +1611,6 @@ public:
     CHIP_ERROR
     Read(const ConcreteReadAttributePath & aPath, AttributeValueEncoder & aEncoder) override
     {
-        // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
         printf(LIGHT_RED"%s", __FUNCTION__);
         printf(NONE"\r\n");
         uint16_t powerSourceDeviceIndex = CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT;
@@ -1235,14 +1667,13 @@ BridgedPowerSourceAttrAccess gPowerAttrAccess;
 EmberAfStatus emberAfExternalAttributeWriteCallback(EndpointId endpoint, ClusterId clusterId,
                                                     const EmberAfAttributeMetadata * attributeMetadata, uint8_t * buffer)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
-    printf(LIGHT_RED"%s", __FUNCTION__);
-    printf(NONE"\r\n");
+    // printf(LIGHT_RED"%s", __FUNCTION__);
+    // printf(NONE"\r\n");
     uint16_t endpointIndex = emberAfGetDynamicIndexFromEndpoint(endpoint);
 
     EmberAfStatus ret = EMBER_ZCL_STATUS_FAILURE;
 
-    ChipLogProgress(DeviceLayer, "emberAfExternalAttributeWriteCallback: ep=%d", endpoint);
+    // ChipLogProgress(DeviceLayer, "emberAfExternalAttributeWriteCallback: ep=%d", endpoint);
 
     if (endpointIndex < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT)
     {
@@ -1250,11 +1681,19 @@ EmberAfStatus emberAfExternalAttributeWriteCallback(EndpointId endpoint, Cluster
 
         if ((dev->IsReachable()) && (clusterId == OnOff::Id))
         {
-            ret = HandleWriteOnOffAttribute(static_cast<DeviceOnOff *>(dev), attributeMetadata->attributeId, buffer);
+            ret = HandleWriteOnOffAttribute(static_cast<DeviceLight *>(dev), attributeMetadata->attributeId, buffer);
         }
         else if ((dev->IsReachable()) && (clusterId == BooleanState::Id))
         {
-            ret = HandleWriteBooleanAttribute(static_cast<DeviceOnOff *>(dev), attributeMetadata->attributeId, buffer);
+            ret = HandleWriteBooleanAttribute(static_cast<DeviceLight *>(dev), attributeMetadata->attributeId, buffer);
+        }
+        else if ((dev->IsReachable()) && (clusterId == LevelControl::Id))
+        {
+            ret = HandleWriteLevelControAttribute(static_cast<DeviceLight *>(dev), attributeMetadata->attributeId, buffer);
+        }
+        else if ((dev->IsReachable()) && (clusterId == ColorControl::Id))
+        {
+            ret = HandleWriteColorControlAttribute(static_cast<DeviceLight *>(dev), attributeMetadata->attributeId, buffer);
         }
     }
 
@@ -1264,7 +1703,6 @@ EmberAfStatus emberAfExternalAttributeWriteCallback(EndpointId endpoint, Cluster
 bool emberAfActionsClusterInstantActionCallback(app::CommandHandler * commandObj, const app::ConcreteCommandPath & commandPath,
                                                 const Actions::Commands::InstantAction::DecodableType & commandData)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     printf(LIGHT_RED"%s", __FUNCTION__);
     printf(NONE"\r\n");
     commandObj->AddStatus(commandPath, Protocols::InteractionModel::Status::NotFound);
@@ -1276,8 +1714,6 @@ void ApplicationInit()
     Read_EndDevice_File();
     Check_Dev_Info();
     Open_Socket();
-    sem_init(&wait_tx_sem, 0, 1);
-    sem_init(&read_attribute_sem, 0, 0);
     add_ep = true;
 }
 
@@ -1300,78 +1736,80 @@ void UpdateClusterStateInternal(intptr_t arg)
     app::Clusters::BooleanState::Attributes::StateValue::Set(resp->endpoint, !resp->status);
 }
 
+void rx_zigbee_gateway_processing(gw_command_t queue)
+{
+    uint32_t commandId;
+
+    commandId = (queue.buffer[5] << 0)   |
+                (queue.buffer[6] << 8)   |
+                (queue.buffer[7] << 16)  |
+                (queue.buffer[8] << 24);
+
+    printf(LIGHT_RED"recv command: ");
+    for (int i = 0; i < queue.len; i++)
+    {
+        printf("%02x ", queue.buffer[i]);
+    }
+    printf(NONE"\r\n");
+
+    switch (commandId)
+    {
+    case 0x00028800:
+        uint16_t temperature;
+
+        temperature = queue.buffer[16] | queue.buffer[17] << 8;
+        // TempSensor[0]->SetMeasuredValue(temperature);
+        ChipLogProgress(DeviceLayer, "Temp: %f", (float)temperature / 100.0);
+        break;
+    case 0x00230000:
+        ChipLogProgress(DeviceLayer, "IAS");
+        uint16_t shortaddr;
+        ias_zone_notify_t resp;
+
+        shortaddr = queue.buffer[9] | queue.buffer[10] << 8;
+
+        for (auto dev : bridge_device)
+        {
+            if (dev.ShortAddress == shortaddr)
+            {
+                resp.endpoint = dev.endpoint;
+                resp.status = (queue.buffer[13] & 0x1) ? true : false;
+            }
+        }
+
+        PlatformMgr().ScheduleWork(UpdateClusterStateInternal, reinterpret_cast<intptr_t>(&resp));
+        break;
+    case 0x00018800:
+        ChipLogProgress(DeviceLayer, "Default response");
+        wait_tx_sem.release();
+        break;
+    case 0x00028000:
+        ChipLogProgress(DeviceLayer, "Read attribute response");
+        gw_read_response_queue.push(queue);
+        wait_tx_sem.release();
+        read_attribute_sem[read_attribute_sem_count]->sem.release();
+        delete read_attribute_sem[read_attribute_sem_count];
+    default:
+        break;
+    }
+}
+
 void rx_queue_process_handler(void)
 {
-    unsigned int commandId;
     gw_command_t queue;
 
-    using namespace std::chrono_literals;
+    // using namespace std::chrono_literals;
 
     while (true)
     {
         if (!gw_rx_command_queue.empty())
         {
             queue = gw_rx_command_queue.front();
-
-            commandId = (queue.buffer[5] << 0)   |
-                        (queue.buffer[6] << 8)   |
-                        (queue.buffer[7] << 16)  |
-                        (queue.buffer[8] << 24);
-
-            printf(LIGHT_RED"recv command: ");
-            for (int i = 0; i < queue.len; i++)
-            {
-                printf("%02x ", queue.buffer[i]);
-            }
-            printf(NONE"\r\n");
-
-            switch (commandId)
-            {
-                case 0x00028800:
-                    unsigned short temperature;
-
-                    temperature = queue.buffer[16] | queue.buffer[17] << 8;
-                    // TempSensor[0]->SetMeasuredValue(temperature);
-                    ChipLogProgress(DeviceLayer, "Temp: %f", (float)temperature / 100.0);
-                    break;
-
-                case 0x00230000:
-                    ChipLogProgress(DeviceLayer, "IAS");
-                    unsigned short shortaddr;
-                    ias_zone_notify_t resp;
-
-                    shortaddr = queue.buffer[9] | queue.buffer[10] << 8;
-
-                    for (auto dev : bridge_device)
-                    {
-                        if (dev.ShortAddress == shortaddr)
-                        {
-                            resp.endpoint = dev.endpoint;
-                            resp.status = (queue.buffer[13] & 0x1) ? true : false;
-                        }
-                    }
-
-                    PlatformMgr().ScheduleWork(UpdateClusterStateInternal, reinterpret_cast<intptr_t>(&resp));
-                    break;
-
-                case 0x00018800:
-                    ChipLogProgress(DeviceLayer, "Default response");
-                    sem_post(&wait_tx_sem);
-                    break;
-
-                case 0x00028000:
-                    ChipLogProgress(DeviceLayer, "Read device attribute response");
-                    gw_tx_response_queue.push(queue);
-                    sem_post(&wait_tx_sem);
-                    sem_post(&read_attribute_sem);
-                    timer_delete(*tid);
-                default:
-                    break;
-            }
+            rx_zigbee_gateway_processing(queue);
             gw_rx_command_queue.pop();
         }
 
-        std::this_thread::sleep_for(10ms);
+        // std::this_thread::sleep_for(100ms);
         std::this_thread::yield();
     }
 }
@@ -1380,7 +1818,7 @@ void tx_queue_process_handler(void)
 {
     gw_command_t queue;
 
-    using namespace std::chrono_literals;
+    // using namespace std::chrono_literals;
 
     while (true)
     {
@@ -1390,17 +1828,16 @@ void tx_queue_process_handler(void)
 
             send(sockfd, queue.buffer, queue.len, 0);
             gw_tx_command_queue.pop();
-            // sem_wait(&wait_tx_sem);
         }
 
-        std::this_thread::sleep_for(10ms);
+        // std::this_thread::sleep_for(100ms);
         std::this_thread::yield();
     }
 }
 
 void add_device_thread_handler(void)
 {
-    using namespace std::chrono_literals;
+    // using namespace std::chrono_literals;
 
     while (true)
     {
@@ -1414,12 +1851,34 @@ void add_device_thread_handler(void)
                 {
                     std::string node = "Light " + std::to_string(index);
 
-                    Light[index] = new DeviceOnOff(node.c_str(), "Office");
+                    Light[index] = new DeviceLight(node.c_str(), "Office");
                     Light[index]->SetReachable(true);
-                    Light[index]->SetChangeCallback(&HandleDeviceOnOffStatusChanged);
+                    Light[index]->SetChangeCallback(&HandleDeviceLightStatusChanged);
 
                     AddDeviceEndpoint(Light[index], &bridgedLightEndpoint, Span<const EmberAfDeviceType>(gBridgedOnOffDeviceTypes),
                         Span<DataVersion>(gLightDataVersions), 1);
+                }
+                else if (dev.clusterId == LevelControl::Id)
+                {
+                    std::string node = "Dimming " + std::to_string(index);
+
+                    Light[index] = new DeviceLight(node.c_str(), "Office");
+                    Light[index]->SetReachable(true);
+                    Light[index]->SetChangeCallback(&HandleDeviceLightStatusChanged);
+
+                    AddDeviceEndpoint(Light[index], &bridgedDimmingEndpoint, Span<const EmberAfDeviceType>(gBridgedDimmingDeviceTypes),
+                        Span<DataVersion>(gDimmingDataVersions), 1);
+                }
+                else if (dev.clusterId == ColorControl::Id)
+                {
+                    std::string node = "ColorLight " + std::to_string(index);
+
+                    Light[index] = new DeviceLight(node.c_str(), "Office");
+                    Light[index]->SetReachable(true);
+                    Light[index]->SetChangeCallback(&HandleDeviceLightStatusChanged);
+
+                    AddDeviceEndpoint(Light[index], &bridgedColorTemperatureEndpoint, Span<const EmberAfDeviceType>(gBridgedColorTemperatureDeviceTypes),
+                        Span<DataVersion>(gColorTemperatureDataVersions), 1);
                 }
                 else if (dev.clusterId == TemperatureMeasurement::Id)
                 {
@@ -1447,30 +1906,30 @@ void add_device_thread_handler(void)
             add_ep = false;
         }
 
-        std::this_thread::sleep_for(10ms);
+        // std::this_thread::sleep_for(100ms);
         std::this_thread::yield();
     }
 }
 
 void tcp_rx_thread_hanlder(void)
 {
-    unsigned char buffer[1024];
+    uint8_t buffer[1024];
     gw_command_t queue;
     ssize_t  nbytes;
-    // unsigned int commandId;
+    // uint32_t commandId;
 
-    using namespace std::chrono_literals;
+    // using namespace std::chrono_literals;
 
     while (true)
     {
         nbytes = recv(sockfd, buffer, 1024, 0);
         if (nbytes > 0)
         {
-            queue.len = (unsigned int)nbytes;
+            queue.len = (uint32_t)nbytes;
             memcpy(queue.buffer, buffer, nbytes);
             gw_rx_command_queue.push(queue);
         }
-        std::this_thread::sleep_for(10ms);
+        // std::this_thread::sleep_for(100ms);
         std::this_thread::yield();
     }
 }
@@ -1520,3 +1979,4 @@ int main(int argc, char * argv[])
 
     return 0;
 }
+

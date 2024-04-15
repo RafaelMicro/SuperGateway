@@ -67,23 +67,44 @@ protected:
     std::string mZone;
 };
 
-class DeviceOnOff : public Device
+class DeviceLight : public Device
 {
 public:
     enum Changed_t
     {
-        kChanged_OnOff = kChanged_Last << 1,
+        kChanged_OnOff                  = kChanged_Last << 1,
+        kChanged_CurrentLevel           = kChanged_Last << 2,
+        kChanged_CurrentHue             = kChanged_Last << 3,
+        kChanged_CurrentSaturation      = kChanged_Last << 4,
+        kChanged_ColorTemperatureMireds = kChanged_Last << 5,
+        kChanged_ColorMode              = kChanged_Last << 6,
     } Changed;
 
-    DeviceOnOff(const char * szDeviceName, std::string szLocation);
-    virtual ~DeviceOnOff() {}
+    DeviceLight(const char * szDeviceName, std::string szLocation);
+    virtual ~DeviceLight() {}
     bool IsOn();
-    void SetOnOff(bool aOn);
     void Toggle();
+    void SetColorMode(uint8_t aColorMode);
+    void SetOnOff(bool aOn);
+    void SetCurrentLevel(uint8_t aCurrentLevel);
+    void SetCurrentHue(uint8_t aCurrentHue);
+    void SetCurrentSaturation(uint8_t aCurrentSaturation);
+    void SetColorTemperatureMireds(uint16_t aColorTemperatureMireds);
 
-    void Set(bool aOn);
+    uint8_t GetColorMode();
+    uint8_t GetCurrentLevel();
+    uint8_t GetCurrentHue();
+    uint8_t GetCurrentSaturation();
+    uint16_t GetColorTemperatureMireds();
 
-    using DeviceCallback_fn = std::function<void(DeviceOnOff *, DeviceOnOff::Changed_t)>;
+    void SetColorModeVal(uint8_t aColorMode);
+    void SetOnOffVal(bool aOn);
+    void SetCurrentLevelVal(uint8_t aCurrentLevel);
+    void SetCurrentHueVal(uint8_t aCurrentHue);
+    void SetCurrentSaturationVal(uint8_t aCurrentSaturation);
+    void SetColorTemperatureMiredsVal(uint16_t aColorTemperatureMireds);
+
+    using DeviceCallback_fn = std::function<void(DeviceLight *, DeviceLight::Changed_t)>;
     void SetChangeCallback(DeviceCallback_fn aChanged_CB);
 
 private:
@@ -91,6 +112,11 @@ private:
 
 private:
     bool mOn;
+    uint8_t mColorMode;
+    uint8_t mCurrentLevel;
+    uint8_t mCurrentHue;
+    uint8_t mCurrentSaturation;
+    uint16_t mColorTemperatureMireds;
     DeviceCallback_fn mChanged_CB;
 };
 
@@ -99,7 +125,7 @@ class DeviceContactSensor : public Device
 public:
     enum Changed_t
     {
-        kChanged_OnOff = kChanged_Last << 1,
+        kChanged_OnOff =        kChanged_Last << 1,
     } Changed;
 
     DeviceContactSensor(const char * szDeviceName, std::string szLocation);

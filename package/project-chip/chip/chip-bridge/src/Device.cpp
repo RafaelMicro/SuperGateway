@@ -18,7 +18,6 @@
  */
 
 #include "Device.h"
-
 #include <cstdio>
 #include <platform/CHIPDeviceLayer.h>
 
@@ -40,8 +39,6 @@ bool Device::IsReachable()
 void Device::SetReachable(bool aReachable)
 {
     bool changed = (mReachable != aReachable);
-
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     
     mReachable = aReachable;
 
@@ -80,29 +77,38 @@ void Device::SetLocation(std::string szLocation)
 
     mLocation = szLocation;
 
-    // ChipLogProgress(DeviceLayer, "Device[%s]: Location=\"%s\"", mName, mLocation.c_str());
-
     if (changed)
     {
         HandleDeviceChange(this, kChanged_Location);
     }
 }
 
-DeviceOnOff::DeviceOnOff(const char * szDeviceName, std::string szLocation) : Device(szDeviceName, szLocation)
+DeviceLight::DeviceLight(const char * szDeviceName, std::string szLocation) : Device(szDeviceName, szLocation)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     mOn = false;
 }
 
-bool DeviceOnOff::IsOn()
+bool DeviceLight::IsOn()
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     return mOn;
 }
 
-void DeviceOnOff::SetOnOff(bool aOn)
+void DeviceLight::SetColorMode(uint8_t aColorMode)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    bool changed;
+
+    changed = aColorMode ^ mColorMode;
+    mColorMode     = aColorMode;
+    ChipLogProgress(DeviceLayer, "Device[%s]: %d", mName, aColorMode);
+
+    if ((changed) && (mChanged_CB))
+    {
+        mChanged_CB(this, kChanged_ColorMode);
+    }
+}
+
+void DeviceLight::SetOnOff(bool aOn)
+{
     bool changed;
 
     changed = aOn ^ mOn;
@@ -111,47 +117,143 @@ void DeviceOnOff::SetOnOff(bool aOn)
 
     if ((changed) && (mChanged_CB))
     {
-        // ChipLogProgress(DeviceLayer, "Light Control Callback");
         mChanged_CB(this, kChanged_OnOff);
     }
 }
 
-void DeviceOnOff::Toggle()
+void DeviceLight::SetCurrentLevel(unsigned char aCurrentLevel)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    ChipLogProgress(DeviceLayer, "Device[%s] set level: %d", mName, aCurrentLevel);    
+    bool changed;
+
+    changed = aCurrentLevel ^ mCurrentLevel;
+    mCurrentLevel = aCurrentLevel;
+    if ((changed) && (mChanged_CB))
+    {
+        mChanged_CB(this, kChanged_CurrentLevel);
+    }
+}
+
+void DeviceLight::SetCurrentHue(unsigned char aCurrentHue)
+{
+    ChipLogProgress(DeviceLayer, "Device[%s] set hue: %d", mName, aCurrentHue);
+    bool changed;
+
+    changed = aCurrentHue ^ mCurrentHue;
+    mCurrentHue = aCurrentHue;
+    if ((changed) && (mChanged_CB))
+    {
+        mChanged_CB(this, kChanged_CurrentHue);
+    }
+}
+
+void DeviceLight::SetCurrentSaturation(unsigned char aCurrentSaturation)
+{
+    ChipLogProgress(DeviceLayer, "Device[%s] set saturation: %d", mName, aCurrentSaturation);
+    bool changed;
+
+    changed = aCurrentSaturation ^ mCurrentSaturation;
+    mCurrentSaturation = aCurrentSaturation;
+    if ((changed) && (mChanged_CB))
+    {
+        mChanged_CB(this, kChanged_CurrentSaturation);
+    }
+}
+
+void DeviceLight::SetColorTemperatureMireds(unsigned short aColorTemperatureMireds)
+{
+    ChipLogProgress(DeviceLayer, "Device[%s] set mireds: %d", mName, aColorTemperatureMireds);
+    bool changed;
+
+    changed = aColorTemperatureMireds ^ mColorTemperatureMireds;
+    mColorTemperatureMireds = aColorTemperatureMireds;
+    if ((changed) && (mChanged_CB))
+    {
+        mChanged_CB(this, kChanged_ColorTemperatureMireds);
+    }
+}
+
+uint8_t DeviceLight::GetColorMode()
+{
+    return mColorMode;
+}
+
+uint8_t DeviceLight::GetCurrentLevel()
+{
+    return mCurrentLevel;
+}
+
+uint8_t DeviceLight::GetCurrentHue()
+{
+    return mCurrentHue;
+}
+
+uint8_t DeviceLight::GetCurrentSaturation()
+{
+    return mCurrentSaturation;
+}
+
+uint16_t DeviceLight::GetColorTemperatureMireds()
+{
+    return mColorTemperatureMireds;
+}
+
+void DeviceLight::Toggle()
+{
     bool aOn = !IsOn();
     SetOnOff(aOn);
 }
 
-void DeviceOnOff::Set(bool aOn)
+void DeviceLight::SetColorModeVal(uint8_t aColorMode)
+{
+    mColorMode = aColorMode;
+}
+
+void DeviceLight::SetOnOffVal(bool aOn)
 {
     mOn = aOn;
 }
 
-void DeviceOnOff::SetChangeCallback(DeviceCallback_fn aChanged_CB)
+void DeviceLight::SetCurrentLevelVal(uint8_t aCurrentLevel)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
+    mCurrentLevel = aCurrentLevel;
+}
+
+void DeviceLight::SetCurrentHueVal(uint8_t aCurrentHue)
+{
+    mCurrentHue = aCurrentHue;
+}
+
+void DeviceLight::SetCurrentSaturationVal(uint8_t aCurrentSaturation)
+{
+    mCurrentSaturation = aCurrentSaturation;
+}
+
+void DeviceLight::SetColorTemperatureMiredsVal(uint16_t aColorTemperatureMireds)
+{
+    mColorTemperatureMireds = aColorTemperatureMireds;
+}
+
+void DeviceLight::SetChangeCallback(DeviceCallback_fn aChanged_CB)
+{
     mChanged_CB = aChanged_CB;
 }
 
-void DeviceOnOff::HandleDeviceChange(Device * device, Device::Changed_t changeMask)
+void DeviceLight::HandleDeviceChange(Device * device, Device::Changed_t changeMask)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     if (mChanged_CB)
     {
-        mChanged_CB(this, (DeviceOnOff::Changed_t) changeMask);
+        mChanged_CB(this, (DeviceLight::Changed_t) changeMask);
     }
 }
 
 DeviceContactSensor::DeviceContactSensor(const char * szDeviceName, std::string szLocation) : Device(szDeviceName, szLocation)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     mStatus = false;
 }
 
 bool DeviceContactSensor::IsOpen()
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     return mStatus;
 }
 
@@ -162,13 +264,11 @@ void DeviceContactSensor::Set(bool aStatus)
 
 void DeviceContactSensor::SetChangeCallback(DeviceCallback_fn aChanged_CB)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     mChanged_CB = aChanged_CB;
 }
 
 void DeviceContactSensor::HandleDeviceChange(Device * device, Device::Changed_t changeMask)
 {
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     if (mChanged_CB)
     {
         mChanged_CB(this, (DeviceContactSensor::Changed_t) changeMask);

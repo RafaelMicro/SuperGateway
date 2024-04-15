@@ -3,6 +3,9 @@
         "stdint.h": "c",
         "chrono": "cpp",
         "variant": "cpp",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "condition_variable": "cpp",
+        "future": "cpp",
+        "filesystem": "cpp"
     }
 }
