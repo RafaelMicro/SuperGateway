@@ -11,6 +11,12 @@
 #include <unordered_map>
 #include <vector>
 
+typedef enum config_error {
+  NO_ERROR = 0,
+  SECTION_NOTFOUND,
+  VALUE_NOTFOUND,
+} config_error_t;
+
 class INIConfig {
 public:
   INIConfig(){};
@@ -23,18 +29,18 @@ public:
 
   void write() const;
   void show_config() const;
+  config_error_t CheckAttbute(const std::string &section,
+                              const std::string &name) const;
 
   template <typename T>
   T GetAttbute(const std::string &section, const std::string &name) {
-    std::string value = GetValue(section, name);
-    if constexpr (std::is_same<T, std::string>())
-      return static_cast<T>(value);
-    else if constexpr (std::is_same<T, int>())
-      return static_cast<T>(std::stoi(value));
-    else if constexpr (std::is_same<T, double>())
-      return static_cast<T>(std::stod(value));
-    else if constexpr (std::is_same<T, bool>())
-      return static_cast<T>(BoolConverter(value));
+    std::string value;
+    config_error_t ret;
+    ret = GetValue(section, name, value);
+    if constexpr (std::is_same<T, std::string>()) return static_cast<T>(value);
+    else if constexpr (std::is_same<T, int>())    return static_cast<T>(std::stoi(value));
+    else if constexpr (std::is_same<T, double>()) return static_cast<T>(std::stod(value));
+    else if constexpr (std::is_same<T, bool>())   return static_cast<T>(BoolConverter(value));
     else
       throw std::runtime_error("Unsupported type " + section + " " + name);
   };
@@ -54,14 +60,15 @@ public:
   template <typename T>
   std::vector<T> GetVector(const std::string &section,
                            const std::string &name) const {
-    std::string value = GetValue(section, name);
+    std::string value;
+    config_error_t ret;
+    ret = GetValue(section, name, value);
     std::istringstream out{value};
     const std::vector<std::string> strs{std::istream_iterator<std::string>{out},
                                         std::istream_iterator<std::string>()};
     try {
       std::vector<T> vs{};
-      for (const std::string &s : strs)
-        vs.emplace_back(Converter<T>(s));
+      for (const std::string &s : strs) vs.emplace_back(Converter<T>(s));
       return vs;
     } catch (std::exception &e) {
       throw std::runtime_error("Parse vector<T> file" + value);
@@ -91,10 +98,10 @@ protected:
   int ParseError() const;
   const std::set<std::string> Sections() const;
   const std::set<std::string> Keys(std::string section) const;
-  const std::unordered_map<std::string, std::string>
-  GetSection(std::string section) const;
-  std::string GetValue(const std::string &section,
-                       const std::string &name) const;
+  config_error_t GetSection(std::string section, 
+                            std::unordered_map<std::string, std::string> &val) const;
+  config_error_t GetValue(const std::string &section, const std::string &name,
+                          std::string &val) const;
   static int ValueHandler(void *user, const char *section, const char *name,
                           const char *value);
   bool BoolConverter(std::string s) const;
@@ -119,8 +126,7 @@ protected:
 
   template <typename T>
   inline std::string Vec2String(const std::vector<T> &v) const {
-    if (v.empty())
-      return "";
+    if (v.empty()) return "";
     std::ostringstream oss;
     std::copy(v.begin(), v.end() - 1, std::ostream_iterator<T>(oss, " "));
     oss << v.back();

@@ -86,4 +86,14 @@ void cliDelOnOffLight(CLI_Token_t *TK) {
   Rafael::DeviceLibrary::DeviceMgr().DelDeviceEndpoint<DeviceOnOffLight, DeviceAttOnOffLight>(EPId);
 }
 
+void cliDelOnOffLightSwitch(CLI_Token_t *TK) {
+  uint16_t EPId = (uint16_t)atoi(TK->token_list[1].ptr);
+  Rafael::DeviceLibrary::DeviceMgr().DelDeviceEndpoint<DeviceOnOffLightSwitch, DeviceAttOnOffLightSwitch>(EPId);
+}
+
+void cliDelContactSensor(CLI_Token_t *TK) {
+  uint16_t EPId = (uint16_t)atoi(TK->token_list[1].ptr);
+  Rafael::DeviceLibrary::DeviceMgr().DelDeviceEndpoint<DeviceContactSensor, DeviceAttContactSensor>(EPId);
+}
+
 void cliListEndpoint(CLI_Token_t *TK) { Rafael::DeviceLibrary::DeviceMgr().ListDeviceList(); }
