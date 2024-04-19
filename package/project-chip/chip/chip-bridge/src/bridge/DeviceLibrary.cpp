@@ -25,6 +25,7 @@
 #include "platfrom/Device.h"
 #include "DeviceLibrary.h"
 #include "ApplicationCluster.h"
+#include "config/INIConfig.h"
 #include <app/server/Server.h>
 
 #include <cassert>
@@ -38,6 +39,10 @@ using namespace chip::Inet;
 using namespace chip::Transport;
 using namespace chip::DeviceLayer;
 using namespace chip::app::Clusters;
+
+#ifndef BRIDGE_CONFIG_FILE
+#define BRIDGE_CONFIG_FILE "./rafael_bridged.ini"
+#endif
 
 namespace Rafael {
 namespace DeviceLibrary {
@@ -189,6 +194,7 @@ std::vector<Action *> GetActionListInfo(chip::EndpointId parentId) { return gAct
 
 void DeviceManager::Init()
 {
+    INIConfig::GetInstance()->Init(BRIDGE_CONFIG_FILE);
     gFirstDynamicEndpointId = static_cast<chip::EndpointId>(
         static_cast<int>(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1))) + 1);
     gCurrentEndpointId = gFirstDynamicEndpointId;

@@ -61,6 +61,7 @@ public:
 class DeviceAttOnOffLight : public DeviceAttBase
 {
 public:
+    std::string deviceTypeName = "OnOffLight";
     DeviceAttOnOffLight(std::string aname, std::string alocation);
     EmberAfCluster Clusters[5] = {
         { Descriptor::Id, RafaelCluster::Descriptor::Attrs, ArraySize(RafaelCluster::Descriptor::Attrs), 
@@ -90,6 +91,7 @@ public:
 class DeviceAttOnOffLightSwitch : public DeviceAttBase
 {
 public:
+    std::string deviceTypeName = "OnOffLightSwitch";
     DeviceAttOnOffLightSwitch(std::string aname, std::string alocation);
     EmberAfCluster Clusters[4] = {
         { Descriptor::Id, RafaelCluster::Descriptor::Attrs, ArraySize(RafaelCluster::Descriptor::Attrs), 
@@ -116,6 +118,7 @@ public:
 class DeviceAttContactSensor : public DeviceAttBase
 {
 public:
+    std::string deviceTypeName = "ContactSensor";
     DeviceAttContactSensor(std::string aname, std::string alocation);
     EmberAfCluster Clusters[3] = {
         { Descriptor::Id, RafaelCluster::Descriptor::Attrs, ArraySize(RafaelCluster::Descriptor::Attrs), 

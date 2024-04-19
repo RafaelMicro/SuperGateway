@@ -6,6 +6,7 @@
 
 #include <app/util/attribute-storage.h>
 #include <lib/core/DataModelTypes.h>
+#include "config/INIConfig.h"
 
 #ifndef DataVersion
 typedef uint32_t DataVersion;
@@ -68,7 +69,6 @@ public:
     };
     template <typename T, typename M>
     static void DelDevice(uint16_t idx) {
-        ChipLogProgress(DeviceLayer, "%s", __func__);
         for(uint16_t i = 0; i < epList.size(); i++) {
             if(epList[i]->endpointId == idx) {
                 free(devList<T, M>[idx]);
@@ -79,17 +79,21 @@ public:
 
     template <class T, typename M>
     static void DelDeviceEndpoint(uint16_t idx) {
-        if (GetDeviceList(idx) == nullptr)  { 
+        auto dev = GetDeviceList(idx);
+        if (dev == nullptr)  { 
             ChipLogProgress(DeviceLayer, "Endpoint Id not found");
             return;
         }
         chip::DeviceLayer::StackLock lock;
-        ChipLogProgress(DeviceLayer, "try delete device: %d", idx);
-        chip::EndpointId ep = emberAfClearDynamicEndpoint(idx);
-        ChipLogProgress(DeviceLayer, "Removed device from dynamic endpoint %d (index=%d)", ep, idx);
-        DelDeviceList(idx);
-        DelDevice<T, M>(idx);
+        ChipLogProgress(DeviceLayer, "try delete device: %d", dev->endpointId);
+        chip::EndpointId ep = emberAfClearDynamicEndpoint(dev->endpointIndex);
+        ChipLogProgress(DeviceLayer, "Removed device from dynamic endpoint %d (index=%d)",
+                        dev->endpointId, dev->endpointIndex);
+        DelDeviceList(dev->endpointId);
+        DelDevice<T, M>(dev->endpointId);
         UNUSED_VAR(ep);
+        INIConfig::GetInstance()->DelSection( std::to_string(dev->endpointId));
+        INIConfig::GetInstance()->write();
         return;
     }
     template <typename T, class M>
@@ -117,6 +121,11 @@ public:
                 AddDeviceList(epType);
                 ChipLogProgress(DeviceLayer, "Added device %s to dynamic endpoint %d (index= %d)", 
                                 dev->GetName().c_str(), gCurrentEndpointId, index);
+                INIConfig::GetInstance()->SetAttribute<int>(
+                    std::to_string(gCurrentEndpointId), "endpointIndex", epType->endpointIndex);
+                INIConfig::GetInstance()->SetAttribute<std::string>(
+                    std::to_string(gCurrentEndpointId), "deviceType", epDevice->deviceAtt->deviceTypeName);
+                INIConfig::GetInstance()->write();
                 gCurrentEndpointId++;
                 return index;
             }

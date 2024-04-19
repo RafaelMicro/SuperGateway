@@ -45,6 +45,10 @@ public:
       throw std::runtime_error("Unsupported type " + section + " " + name);
   };
 
+  void DelAttribute(const std::string &section, const std::string &name);
+
+  void DelSection(const std::string &section);
+
   template <typename T>
   void SetAttribute(const std::string &section, const std::string &name,
                     const T &v) {

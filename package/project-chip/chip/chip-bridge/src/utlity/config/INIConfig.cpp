@@ -53,6 +53,16 @@ const std::set<std::string> INIConfig::Sections() const {
   return retval;
 }
 
+const std::set<std::string> INIConfig::Keys(std::string section) const {
+  config_error_t ret = NO_ERROR;
+  std::unordered_map<std::string, std::string> _section;
+  std::set<std::string> retval;
+  ret = GetSection(section, _section);
+  for (auto const &element : _section)
+    retval.insert(element.first);
+  return retval;
+}
+
 config_error_t
 INIConfig::GetSection(std::string section,
                       std::unordered_map<std::string, std::string> &val) const {
@@ -64,15 +74,9 @@ INIConfig::GetSection(std::string section,
   return ret;
 }
 
-const std::set<std::string> INIConfig::Keys(std::string section) const {
-  config_error_t ret = NO_ERROR;
-  std::unordered_map<std::string, std::string> _section;
-  std::set<std::string> retval;
-  ret = GetSection(section, _section);
-  for (auto const &element : _section)
-    retval.insert(element.first);
-  return retval;
-}
+void INIConfig::DelAttribute(const std::string &section, const std::string &name) { _values[section].erase(name); };
+
+void INIConfig::DelSection(const std::string &section) { _values.erase(section); };
 
 config_error_t INIConfig::GetValue(const std::string &section,
                                    const std::string &name,

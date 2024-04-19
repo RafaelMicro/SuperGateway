@@ -64,25 +64,17 @@ EmberAfStatus emberAfExternalAttributeWriteCallback(EndpointId endpoint, Cluster
     if (endpointIndex >= CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT) { return EMBER_ZCL_STATUS_FAILURE; }
     if (Rafael::DeviceLibrary::DeviceMgr().GetDeviceList(endpoint) == nullptr) { return EMBER_ZCL_STATUS_FAILURE; }
     return RafaelCluster::BridgedMgr().BridgedHandleWriteEvent(endpointIndex, endpoint, clusterId, attributeMetadata, buffer);
-
-    // ChipLogProgress(DeviceLayer, "\n\n**** %s, clusterId: 0x%04X\n\n", __FUNCTION__, clusterId);
-    // uint16_t epIndex = emberAfGetDynamicIndexFromEndpoint(endpoint);
-    // return  epIndex < CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT ? 
-    //         RafaelCluster::BridgedMgr().BridgedHandleWriteEvent(epIndex, endpoint, clusterId, attributeMetadata, buffer): 
-    //         EMBER_ZCL_STATUS_FAILURE;
 }
 
 bool emberAfActionsClusterInstantActionCallback(app::CommandHandler * commandObj, const app::ConcreteCommandPath & commandPath,
                                                 const Clusters::Actions::Commands::InstantAction::DecodableType & commandData)
 {
-    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     commandObj->AddStatus(commandPath, Protocols::InteractionModel::Status::NotFound);
     return true;
 }
 
 int matter_init(int argc, char * argv[])
 {
-    ChipLogProgress(DeviceLayer, "\n\n**** %s\n\n", __FUNCTION__);
     if (ChipLinuxAppInit(argc, argv) != 0) { return -1; }
 
     static chip::CommonCaseDeviceServerInitParams initParams;
