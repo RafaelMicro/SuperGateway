@@ -48,23 +48,18 @@ chip::EndpointId DeviceManager::gCurrentEndpointId;
 DeviceManager & DeviceMgr(void) { return DeviceManager::sDeviceManager; };
 
 deviceEP_t* DeviceManager::GetDeviceList(uint16_t idx) {
-    for (auto ep : epList) {
-        if(ep->endpointId == idx) return ep;
-    }
+    for (auto ep : epList) if(ep->endpointId == idx) return ep; 
     return nullptr;
 };
 
 deviceEP_t* DeviceManager::GetDeviceIndex(uint16_t idx) {
-    for (auto ep : epList) {
-        if(ep->endpointIndex == idx) return ep;
-    }
+    for (auto ep : epList)  if(ep->endpointIndex == idx) return ep; 
     return nullptr;
 };
 
 void DeviceManager::AddDeviceList(deviceEP_t * dev) { 
     if(epList.size() > CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT) {
-        ChipLogProgress(DeviceLayer, "Fully epList, Dynamic EP count: %d",
-                        CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT);
+        ChipLogProgress(DeviceLayer, "Fully epList, Dynamic EP count: %d", CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT);
         return ;
     } 
     epList.push_back(dev);
@@ -197,6 +192,7 @@ void DeviceManager::Init()
     gFirstDynamicEndpointId = static_cast<chip::EndpointId>(
         static_cast<int>(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1))) + 1);
     gCurrentEndpointId = gFirstDynamicEndpointId;
+    emberAfEndpointEnableDisable(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1)), false);
     return ;
 }
 

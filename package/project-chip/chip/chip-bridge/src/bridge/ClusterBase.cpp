@@ -13,12 +13,16 @@ using namespace chip::app::Clusters::Actions;
 
 DeviceAttBase::DeviceAttBase(std::string aname, std::string alocation) 
     :name(std::move(aname)), location(std::move(alocation)) {};
+
 DeviceAttOnOffLight::DeviceAttOnOffLight(std::string aname, std::string alocation) 
     : DeviceAttBase(aname, alocation) {};
+
 DeviceAttOnOffLightSwitch::DeviceAttOnOffLightSwitch(std::string aname, std::string alocation) 
     : DeviceAttBase(aname, alocation) {};
+
 DeviceAttContactSensor::DeviceAttContactSensor(std::string aname, std::string alocation) 
     : DeviceAttBase(aname, alocation) {};
+
 
 DeviceBase::DeviceBase(std::string szDeviceName, std::string szLocation)
     : mReachable(false), mEndpointId(0), mName(std::move(szDeviceName)), mLocation(std::move(szLocation)){};

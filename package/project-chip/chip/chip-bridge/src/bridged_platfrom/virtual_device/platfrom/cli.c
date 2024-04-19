@@ -24,7 +24,6 @@ static int command_parser(str_space_t* input, CLI_Token_t *TK) {
     }
     if(!isspace(input->ptr[pos+1])) { TK->token_list[TK->count].len++; }
     else {
-      printf("Token: %d, len: %d\n", TK->count, TK->token_list[TK->count].len);
       TK->count++;
       first = true;
     }

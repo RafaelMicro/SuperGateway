@@ -64,29 +64,26 @@ void cliHelp(CLI_Token_t *TK) {
 }
 
 void cliGenOnOffLight(CLI_Token_t *TK) {
-  std::string name = DEFAULT_ONOFF_LIGHT_NAME + std::to_string(dev_index++);
-  DeviceAttOnOffLight devLight(name, room);
+  std::string light_name = DEFAULT_ONOFF_LIGHT_NAME + std::to_string(dev_index++);
   Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLight, DeviceAttOnOffLight>(
-    &devLight, DEVICE_TYPE_ON_OFF_LIGHT);
+    light_name, room, DEVICE_TYPE_ON_OFF_LIGHT);
 }
 
 void cligenOnOffLightSwitch(CLI_Token_t *TK) {
   std::string name = DEFAULT_ONOFF_LIGHT_SWITCH_NAME + std::to_string(dev_index++);
-  DeviceAttOnOffLightSwitch devLightSwitch(name, room);
   Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLightSwitch, DeviceAttOnOffLightSwitch>(
-    &devLightSwitch, DEVICE_TYPE_ON_OFF_LIGHT_SWITCH);
+    name, room, DEVICE_TYPE_ON_OFF_LIGHT_SWITCH);
 }
 
 void cliGenContactSensor(CLI_Token_t *TK) {
   std::string name = DEFAULT_CONTACT_SENSOR_NAME + std::to_string(dev_index++);
-  DeviceAttContactSensor devContactSensor(name, room);
   Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceContactSensor, DeviceAttContactSensor>(
-    &devContactSensor, DEVICE_TYPE_CONTACT_SENSOR);
+    name, room, DEVICE_TYPE_CONTACT_SENSOR);
 }
 
 void cliDelOnOffLight(CLI_Token_t *TK) {
   uint16_t EPId = (uint16_t)atoi(TK->token_list[1].ptr);
-  Rafael::DeviceLibrary::DeviceMgr().DelDeviceEndpoint<DeviceOnOffLight>(EPId);
+  Rafael::DeviceLibrary::DeviceMgr().DelDeviceEndpoint<DeviceOnOffLight, DeviceAttOnOffLight>(EPId);
 }
 
 void cliListEndpoint(CLI_Token_t *TK) { Rafael::DeviceLibrary::DeviceMgr().ListDeviceList(); }

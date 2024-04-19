@@ -50,8 +50,8 @@ public:
     virtual ~DeviceAttBase() {};
     EmberAfCluster *Clusters;
     uint8_t ClusterSize;
-    EmberAfEndpointType Endpoint;
-    EmberAfDeviceType* DeviceTypes;
+    // const EmberAfEndpointType Endpoint;
+    // const EmberAfDeviceType* DeviceTypes;
     uint8_t DeviceTypeSize;
     DataVersion* DataVersions;
     std::string name;
@@ -63,48 +63,50 @@ class DeviceAttOnOffLight : public DeviceAttBase
 public:
     DeviceAttOnOffLight(std::string aname, std::string alocation);
     EmberAfCluster Clusters[5] = {
-        { Descriptor::Id, RafaelCluster::descriptorAttrs, ArraySize(RafaelCluster::descriptorAttrs), 
+        { Descriptor::Id, RafaelCluster::Descriptor::Attrs, ArraySize(RafaelCluster::Descriptor::Attrs), 
             0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
-        { BridgedDeviceBasicInformation::Id, RafaelCluster::bridgedDeviceBasicAttrs, ArraySize(RafaelCluster::bridgedDeviceBasicAttrs), 
+        { BridgedDeviceBasicInformation::Id, RafaelCluster::BridgedDeviceBasic::Attrs, ArraySize(RafaelCluster::BridgedDeviceBasic::Attrs), 
             0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
         { RafaelCluster::Scenes::clusterId, RafaelCluster::Scenes::Attrs, ArraySize(RafaelCluster::Scenes::Attrs), 
-            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::Scenes::serverCommands, RafaelCluster::Scenes::clientCommands, 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::Scenes::clientCommands, nullptr,
             RafaelCluster::Scenes::Events, ArraySize(RafaelCluster::Scenes::Events) },
         { RafaelCluster::OnOff::clusterId, RafaelCluster::OnOff::Attrs, ArraySize(RafaelCluster::OnOff::Attrs), 
-            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::OnOff::serverCommands, RafaelCluster::OnOff::clientCommands, 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::OnOff::clientCommands, nullptr, 
             RafaelCluster::OnOff::Events, ArraySize(RafaelCluster::OnOff::Events) },
         { RafaelCluster::Level::clusterId, RafaelCluster::Level::Attrs, ArraySize(RafaelCluster::Level::Attrs), 
-            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::Level::serverCommands, RafaelCluster::Level::clientCommands, 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::Level::clientCommands, nullptr, 
             RafaelCluster::Level::Events, ArraySize(RafaelCluster::Level::Events) },
         // ADD_SERVER_CLUSTER(RafaelCluster::OccupancySensing),
     };
     DataVersion DataVersions[5];
     uint8_t ClusterSize = 5;
-    EmberAfEndpointType Endpoint = { Clusters, 5, 0};
+    const EmberAfEndpointType Endpoint = { Clusters, ArraySize(Clusters), 0};
     EmberAfDeviceType DeviceTypes[2] = { 
         ZAP_DEVICE_TYPE(DEVICE_TYPE_ON_OFF_LIGHT), ZAP_DEVICE_TYPE(DEVICE_TYPE_BRIDGED_NODE)
     };
     uint8_t DeviceTypeSize = 2;
-
 };
 
 class DeviceAttOnOffLightSwitch : public DeviceAttBase
 {
 public:
     DeviceAttOnOffLightSwitch(std::string aname, std::string alocation);
-    EmberAfCluster Clusters[3] = {
-        { Descriptor::Id, RafaelCluster::descriptorAttrs, ArraySize(RafaelCluster::descriptorAttrs), 
+    EmberAfCluster Clusters[4] = {
+        { Descriptor::Id, RafaelCluster::Descriptor::Attrs, ArraySize(RafaelCluster::Descriptor::Attrs), 
             0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
-        { BridgedDeviceBasicInformation::Id, RafaelCluster::bridgedDeviceBasicAttrs, ArraySize(RafaelCluster::bridgedDeviceBasicAttrs), 
+        { BridgedDeviceBasicInformation::Id, RafaelCluster::BridgedDeviceBasic::Attrs, ArraySize(RafaelCluster::BridgedDeviceBasic::Attrs), 
             0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
+        { RafaelCluster::Scenes::clusterId, RafaelCluster::Scenes::Attrs, ArraySize(RafaelCluster::Scenes::Attrs), 
+            0, ZAP_CLUSTER_MASK(CLIENT), NULL, nullptr, RafaelCluster::Scenes::serverCommands,
+            RafaelCluster::Scenes::Events, ArraySize(RafaelCluster::Scenes::Events) },
         { RafaelCluster::OnOff::clusterId, RafaelCluster::OnOff::Attrs, ArraySize(RafaelCluster::OnOff::Attrs), 
-            0, ZAP_CLUSTER_MASK(SERVER), NULL, RafaelCluster::OnOff::serverCommands, RafaelCluster::OnOff::clientCommands, 
+            0, ZAP_CLUSTER_MASK(CLIENT), NULL, nullptr, RafaelCluster::OnOff::serverCommands,
             RafaelCluster::OnOff::Events, ArraySize(RafaelCluster::OnOff::Events) },
     };
-    DataVersion DataVersions[3];
-    uint8_t ClusterSize = 3;
-    EmberAfEndpointType Endpoint = { Clusters, ArraySize(Clusters), 0};
-    EmberAfDeviceType DeviceTypes[2] = { 
+    DataVersion DataVersions[4];
+    uint8_t ClusterSize = 4;
+    const EmberAfEndpointType Endpoint = { Clusters, ArraySize(Clusters), 0};
+    const EmberAfDeviceType DeviceTypes[2] = { 
         ZAP_DEVICE_TYPE(DEVICE_TYPE_ON_OFF_LIGHT_SWITCH), ZAP_DEVICE_TYPE(DEVICE_TYPE_BRIDGED_NODE)
     };
     uint8_t DeviceTypeSize = 2;
@@ -116,18 +118,18 @@ class DeviceAttContactSensor : public DeviceAttBase
 public:
     DeviceAttContactSensor(std::string aname, std::string alocation);
     EmberAfCluster Clusters[3] = {
-        { Descriptor::Id, RafaelCluster::descriptorAttrs, ArraySize(RafaelCluster::descriptorAttrs), 
+        { Descriptor::Id, RafaelCluster::Descriptor::Attrs, ArraySize(RafaelCluster::Descriptor::Attrs), 
             0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
-        { BridgedDeviceBasicInformation::Id, RafaelCluster::bridgedDeviceBasicAttrs, ArraySize(RafaelCluster::bridgedDeviceBasicAttrs), 
+        { BridgedDeviceBasicInformation::Id, RafaelCluster::BridgedDeviceBasic::Attrs, ArraySize(RafaelCluster::BridgedDeviceBasic::Attrs), 
             0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
         { RafaelCluster::BooleanState::clusterId, RafaelCluster::BooleanState::Attrs, ArraySize(RafaelCluster::BooleanState::Attrs), 
-            0, ZAP_CLUSTER_MASK(SERVER), NULL, RafaelCluster::BooleanState::serverCommands, RafaelCluster::BooleanState::clientCommands, 
+            0, ZAP_CLUSTER_MASK(SERVER), NULL, RafaelCluster::BooleanState::clientCommands, RafaelCluster::BooleanState::serverCommands,
             RafaelCluster::BooleanState::Events, ArraySize(RafaelCluster::BooleanState::Events) },
     };
     DataVersion DataVersions[3];
     uint8_t ClusterSize = 3;
-    EmberAfEndpointType Endpoint = { Clusters, ArraySize(Clusters), 0};
-    EmberAfDeviceType DeviceTypes[2] = { 
+    const EmberAfEndpointType Endpoint = { Clusters, ArraySize(Clusters), 0};
+    const EmberAfDeviceType DeviceTypes[2] = { 
         ZAP_DEVICE_TYPE(DEVICE_TYPE_CONTACT_SENSOR), ZAP_DEVICE_TYPE(DEVICE_TYPE_BRIDGED_NODE)
     };
     uint8_t DeviceTypeSize = 2;

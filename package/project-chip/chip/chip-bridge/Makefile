@@ -26,8 +26,8 @@ define Package/chip-bridge/description
 	Integrates a router / access point with the Matter IoT ecosystem.
 endef
 
-TARGET_CXXFLAGS += -Wno-format-nonliteral -Wno-unused -Wno-unknown-warning-option
-TARGET_CFLAGS += -Wno-format-nonliteral -Wno-unused -Wno-unknown-warning-option
+TARGET_CXXFLAGS += -Wno-format-nonliteral -Wno-unused -Wno-unknown-warning-option -fexceptions
+TARGET_CFLAGS += -Wno-format-nonliteral -Wno-unused -Wno-unknown-warning-option -fexceptions
 
 # The build environment contains host tools that can be shared between targets
 CHIP_BUILD_ENV_DIR:=$(STAGING_DIR_HOST)/share/chip-build-env

@@ -26,6 +26,7 @@
 #include "CommissionableInit.h"
 #include "platfrom/Device.h"
 #include "DeviceLibrary.h"
+#include "DeviceBase.h"
 #include "ApplicationCluster.h"
 #include "platfrom/cli.h"
 
@@ -46,32 +47,27 @@ namespace RafaelCluster
 
 void * bridge_cli_thread(void * context)
 {
-  uint8_t ret;
-  CLI_Token_t TK;
-  str_space_t input;
-  input.ptr = (char *)malloc(sizeof(char) * CLI_MAX_BUFFER_SIZE);
-  input.len = CLI_MAX_BUFFER_SIZE;
-  while (true) {
-    printf("> ");
-    fgets((char *)input.ptr, input.len, stdin);
-    ret = cli_interpreter(&input, &TK);
-    
-  };
-  return nullptr;
+    uint8_t ret;
+    CLI_Token_t TK;
+    str_space_t input;
+    input.ptr = (char *)malloc(sizeof(char) * CLI_MAX_BUFFER_SIZE);
+    input.len = CLI_MAX_BUFFER_SIZE;
+    while (true) {
+        fgets((char *)input.ptr, input.len, stdin);
+        ret = cli_interpreter(&input, &TK);
+    };
+    return nullptr;
 };
 
 static BridgedManagerImp sInstance;
 BridgedManagerImp & BridgedManagerImp::GetDefaultInstance() { return sInstance; };
 BridgedManager & BridgedMgrImpl() { return BridgedManagerImp::GetDefaultInstance(); };
-void BridgedManagerImp::Init(){ 
-    emberAfEndpointEnableDisable(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1)), false);
-    {
-        pthread_t poll_thread;
-        int res = pthread_create(&poll_thread, nullptr, bridge_cli_thread, nullptr);
-        if (res) {
-            printf("Error creating polling thread: %d\n", res);
-            exit(1);
-        }
+void BridgedManagerImp::Init(){
+    pthread_t poll_thread;
+    int res = pthread_create(&poll_thread, nullptr, bridge_cli_thread, nullptr);
+    if (res) {
+        printf("Error creating polling thread: %d\n", res);
+        exit(1);
     }
     return;
 };
@@ -306,9 +302,9 @@ EmberAfStatus HandleReadOnOffAttribute(T* dev, chip::AttributeId attId, uint8_t 
 };
 
 template<class T>
-EmberAfStatus HandleWriteOnOffAttribute(T* dev, chip::AttributeId attributeId, uint8_t* buffer)
+EmberAfStatus HandleWriteOnOffAttribute(T* dev, chip::AttributeId attId, uint8_t* buffer)
 {
-    switch(attributeId)
+    switch(attId)
     {
         case Clusters::OnOff::Attributes::OnOff::Id:{
             dev->SetOnOff((*buffer)?true:false);
@@ -346,9 +342,9 @@ EmberAfStatus HandleReadBooleanStateAttribute(T* dev, chip::AttributeId attId, u
 };
 
 template<class T>
-EmberAfStatus HandleWriteBooleanStateAttribute(T* dev, chip::AttributeId attributeId, uint8_t* buffer)
+EmberAfStatus HandleWriteBooleanStateAttribute(T* dev, chip::AttributeId attId, uint8_t* buffer)
 {
-    switch(attributeId)
+    switch(attId)
     {
         case Clusters::BooleanState::Attributes::StateValue::Id:{
             dev->SetStateValue((*buffer)?true:false);
@@ -371,8 +367,8 @@ EmberAfStatus HandleReadBridgedDeviceBasicAttribute(T * dev, chip::AttributeId a
             *buffer = dev->IsReachable() ? 1 : 0;
             break;}
         case Clusters::BridgedDeviceBasicInformation::Attributes::NodeLabel::Id:{
-            MutableByteSpan zclNameSpan(buffer, maxLen);
-            MakeZclCharString(zclNameSpan, dev->GetName().c_str());
+            // MutableByteSpan zclNameSpan(buffer, maxLen);
+            // MakeZclCharString(zclNameSpan, dev->GetName());
             break;}
         case Clusters::BridgedDeviceBasicInformation::Attributes::ClusterRevision::Id:{
             uint16_t rev = (2u);
@@ -388,10 +384,10 @@ EmberAfStatus HandleReadBridgedDeviceBasicAttribute(T * dev, chip::AttributeId a
 };
 
 
-EmberAfStatus HandleOnOffLightAttribute(DeviceAction action, uint16_t endpointIndex, 
+EmberAfStatus HandleOnOffLightAttribute(DeviceAction action, uint16_t endpoint, 
     ClusterId clusterId, chip::AttributeId attId, uint8_t * buf, uint16_t maxLen)
 {
-    auto dev = Rafael::DeviceLibrary::DeviceMgr().GetDevice<DeviceOnOffLight>((uint16_t)endpointIndex);
+    auto dev = Rafael::DeviceLibrary::DeviceMgr().GetDevice<DeviceOnOffLight, DeviceAttOnOffLight>((uint16_t)endpoint);
     if(action == DeviceAction::DeviceReadAttrs)
     {
         switch(clusterId)
@@ -424,7 +420,7 @@ EmberAfStatus HandleOnOffLightAttribute(DeviceAction action, uint16_t endpointIn
 EmberAfStatus HandleOnOffLightSwitchAttribute(DeviceAction action, uint16_t endpointIndex, 
     ClusterId clusterId, chip::AttributeId attId, uint8_t * buf, uint16_t maxLen)
 {
-    auto dev = Rafael::DeviceLibrary::DeviceMgr().GetDevice<DeviceOnOffLightSwitch>((uint16_t)endpointIndex);
+    auto dev = Rafael::DeviceLibrary::DeviceMgr().GetDevice<DeviceOnOffLightSwitch, DeviceAttOnOffLightSwitch>((uint16_t)endpointIndex);
     if(action == DeviceAction::DeviceReadAttrs)
     {
         switch(clusterId)
@@ -448,7 +444,7 @@ EmberAfStatus HandleOnOffLightSwitchAttribute(DeviceAction action, uint16_t endp
 EmberAfStatus HandleContactSensorAttribute(DeviceAction action, uint16_t endpointIndex, 
     ClusterId clusterId, chip::AttributeId attId, uint8_t * buf, uint16_t maxLen)
 {
-    auto dev = Rafael::DeviceLibrary::DeviceMgr().GetDevice<DeviceContactSensor>((uint16_t)endpointIndex);
+    auto dev = Rafael::DeviceLibrary::DeviceMgr().GetDevice<DeviceContactSensor, DeviceAttContactSensor>((uint16_t)endpointIndex);
     if(action == DeviceAction::DeviceReadAttrs)
     {
         switch(clusterId)
@@ -475,9 +471,9 @@ EmberAfStatus BridgedManagerImp::BridgedHandleReadEvent(uint16_t endpointIndex, 
     deviceEP_t* dev = DeviceManager::GetDeviceList(endpoint);
     switch (dev->deviceType)
     {
-    case (DEVICE_TYPE_ON_OFF_LIGHT):{ return HandleOnOffLightAttribute(DeviceAction::DeviceReadAttrs, endpointIndex, clusterId, attributeMetadata->attributeId, buffer, maxReadLength); }
-    case (DEVICE_TYPE_ON_OFF_LIGHT_SWITCH):{ return HandleOnOffLightSwitchAttribute(DeviceAction::DeviceReadAttrs, endpointIndex, clusterId, attributeMetadata->attributeId, buffer, maxReadLength); }
-    case (DEVICE_TYPE_CONTACT_SENSOR):{ return HandleContactSensorAttribute(DeviceAction::DeviceReadAttrs, endpointIndex, clusterId, attributeMetadata->attributeId, buffer, maxReadLength); }
+    case (DEVICE_TYPE_ON_OFF_LIGHT):{ return HandleOnOffLightAttribute(DeviceAction::DeviceReadAttrs, endpoint, clusterId, attributeMetadata->attributeId, buffer, maxReadLength); }
+    case (DEVICE_TYPE_ON_OFF_LIGHT_SWITCH):{ return HandleOnOffLightSwitchAttribute(DeviceAction::DeviceReadAttrs, endpoint, clusterId, attributeMetadata->attributeId, buffer, maxReadLength); }
+    case (DEVICE_TYPE_CONTACT_SENSOR):{ return HandleContactSensorAttribute(DeviceAction::DeviceReadAttrs, endpoint, clusterId, attributeMetadata->attributeId, buffer, maxReadLength); }
     default:{ break; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;
@@ -490,9 +486,9 @@ EmberAfStatus BridgedManagerImp::BridgedHandleWriteEvent(uint16_t endpointIndex,
     if(!dev->reachable) return EMBER_ZCL_STATUS_FAILURE;
     switch (dev->deviceType)
     {
-    case (DEVICE_TYPE_ON_OFF_LIGHT):{ return HandleOnOffLightAttribute(DeviceAction::DeviceWriteAttrs, endpointIndex, clusterId, attributeMetadata->attributeId, buffer, 0); }
-    case (DEVICE_TYPE_ON_OFF_LIGHT_SWITCH):{ return HandleOnOffLightSwitchAttribute(DeviceAction::DeviceWriteAttrs, endpointIndex, clusterId, attributeMetadata->attributeId, buffer, 0); }
-    case (DEVICE_TYPE_CONTACT_SENSOR):{ return HandleContactSensorAttribute(DeviceAction::DeviceWriteAttrs, endpointIndex, clusterId, attributeMetadata->attributeId, buffer, 0); }
+    case (DEVICE_TYPE_ON_OFF_LIGHT):{ return HandleOnOffLightAttribute(DeviceAction::DeviceWriteAttrs, endpoint, clusterId, attributeMetadata->attributeId, buffer, 0); }
+    case (DEVICE_TYPE_ON_OFF_LIGHT_SWITCH):{ return HandleOnOffLightSwitchAttribute(DeviceAction::DeviceWriteAttrs, endpoint, clusterId, attributeMetadata->attributeId, buffer, 0); }
+    case (DEVICE_TYPE_CONTACT_SENSOR):{ return HandleContactSensorAttribute(DeviceAction::DeviceWriteAttrs, endpoint, clusterId, attributeMetadata->attributeId, buffer, 0); }
     default:{ break; }
     }
     return EMBER_ZCL_STATUS_SUCCESS;

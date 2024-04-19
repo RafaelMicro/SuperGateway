@@ -38,7 +38,6 @@ CHIP_ERROR ActionsAttrAccess::ReadActionListAttribute(EndpointId endpoint, Attri
                 ReturnErrorOnFailure(encoder.Encode(actionStruct));
             }
         }
-
         return CHIP_NO_ERROR;
     });
     return err;

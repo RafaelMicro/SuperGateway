@@ -48,8 +48,18 @@ namespace RafaelCluster
         static CommandId *clientCommands;
         static EventId *Events;
     };
-    extern EmberAfAttributeMetadata descriptorAttrs[5];
-    extern EmberAfAttributeMetadata bridgedDeviceBasicAttrs[4];
+    
+    class Descriptor
+    {
+        public:
+        static EmberAfAttributeMetadata Attrs[5];
+    };
+    
+    class BridgedDeviceBasic
+    {
+        public:
+        static EmberAfAttributeMetadata Attrs[4];
+    };
     /* =======================*/
     /* ======= GENERAL =======*/
     /* =======================*/

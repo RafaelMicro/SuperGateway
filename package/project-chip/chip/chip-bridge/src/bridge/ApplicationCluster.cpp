@@ -10,7 +10,7 @@ namespace RafaelCluster
 using namespace chip;
 using namespace chip::app;
 
-EmberAfAttributeMetadata descriptorAttrs[5] = {
+EmberAfAttributeMetadata Descriptor::Attrs[5] = {
     ZAP_RECORD(Clusters::Descriptor::Attributes::DeviceTypeList::Id, ZAP_MAX_ARRAY_SIZE, ZAP_ARRAY),
     ZAP_RECORD(Clusters::Descriptor::Attributes::ServerList::Id, ZAP_MAX_ARRAY_SIZE, ZAP_ARRAY),
     ZAP_RECORD(Clusters::Descriptor::Attributes::ClientList::Id, ZAP_MAX_ARRAY_SIZE, ZAP_ARRAY),
@@ -19,7 +19,7 @@ EmberAfAttributeMetadata descriptorAttrs[5] = {
     ZAP_END_ELEMENT,
 };
 
-EmberAfAttributeMetadata bridgedDeviceBasicAttrs[4] = {
+EmberAfAttributeMetadata BridgedDeviceBasic::Attrs[4] = {
     ZAP_RECORD(Clusters::BridgedDeviceBasicInformation::Attributes::NodeLabel::Id, ZAP_MAX_LABLE_SIZE, ZAP_CHAR_STRING),
     ZAP_RECORD(Clusters::BridgedDeviceBasicInformation::Attributes::Reachable::Id, 1, ZAP_BOOL),
     ZAP_RECORD(Clusters::BridgedDeviceBasicInformation::Attributes::FeatureMap::Id, 4, ZAP_BITMAP32),
