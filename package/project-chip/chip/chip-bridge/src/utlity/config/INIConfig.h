@@ -31,6 +31,7 @@ public:
   void show_config() const;
   config_error_t CheckAttbute(const std::string &section,
                               const std::string &name) const;
+  bool CheckSection(const std::string &section) const;
 
   template <typename T>
   T GetAttbute(const std::string &section, const std::string &name) {

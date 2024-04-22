@@ -47,6 +47,8 @@ void cliGenOnOffLight(CLI_Token_t *TK);
 void cligenOnOffLightSwitch(CLI_Token_t *TK);
 void cliGenContactSensor(CLI_Token_t *TK);
 void cliDelOnOffLight(CLI_Token_t *TK);
+void cliDelOnOffLightSwitch(CLI_Token_t *TK);
+void cliDelContactSensor(CLI_Token_t *TK);
 void cliListEndpoint(CLI_Token_t *TK);
 
 CLI_Func_t cli_func[] = {
@@ -55,6 +57,8 @@ CLI_Func_t cli_func[] = {
   {"genOnOffLightSwitch", strlen("genOnOffLightSwitch"), cligenOnOffLightSwitch, "generate OnOff Light Switch"},
   {"genContactSensor", strlen("genContactSensor"), cliGenContactSensor, "generate Contact Sensor"},
   {"DelOnOffLight", strlen("DelOnOffLight"), cliDelOnOffLight, "Delete OnOff Light"},
+  {"DelOnOffLightSwitch", strlen("DelOnOffLightSwitch"), cliDelOnOffLightSwitch, "Delete OnOff Light Switch"},
+  {"DelContactSensor", strlen("DelContactSensor"), cliDelContactSensor, "Delete Contact Sensor"},
   {"ListEndpoint", strlen("ListEndpoint"), cliListEndpoint, "List all Endpoint"},
   {NULL, 0, NULL, NULL}
 };

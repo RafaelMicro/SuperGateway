@@ -24,6 +24,8 @@
 #include "CommissionableInit.h"
 #include "platfrom/Device.h"
 #include "DeviceLibrary.h"
+#include "DeviceBase.h"
+#include "ClusterMacro.h"
 #include "ApplicationCluster.h"
 #include "config/INIConfig.h"
 #include <app/server/Server.h>
@@ -50,6 +52,7 @@ namespace DeviceLibrary {
 DeviceManager DeviceManager::sDeviceManager;
 std::vector<deviceEP_t*> DeviceManager::epList;
 chip::EndpointId DeviceManager::gCurrentEndpointId;
+std::set<chip::EndpointId> DeviceManager::runningEP;
 DeviceManager & DeviceMgr(void) { return DeviceManager::sDeviceManager; };
 
 deviceEP_t* DeviceManager::GetDeviceList(uint16_t idx) {
@@ -192,6 +195,15 @@ std::vector<EndpointListInfo> GetEndpointListInfo(chip::EndpointId parentId)
 
 std::vector<Action *> GetActionListInfo(chip::EndpointId parentId) { return gActions; };
 
+chip::EndpointId DeviceManager::GetEndpointId()
+{
+    for(chip::EndpointId i=gFirstDynamicEndpointId; i<CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT+gFirstDynamicEndpointId; i++)
+        if(runningEP.find(i)==runningEP.end()) return i;
+    return -1;
+}
+
+void DeviceManager::AddEndpointId(chip::EndpointId val) { runningEP.insert(val); }
+
 void DeviceManager::Init()
 {
     INIConfig::GetInstance()->Init(BRIDGE_CONFIG_FILE);
@@ -199,6 +211,31 @@ void DeviceManager::Init()
         static_cast<int>(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1))) + 1);
     gCurrentEndpointId = gFirstDynamicEndpointId;
     emberAfEndpointEnableDisable(emberAfEndpointFromIndex(static_cast<uint16_t>(emberAfFixedEndpointCount() - 1)), false);
+    std::string epid;
+    for(int i=gFirstDynamicEndpointId; i<CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT+3+1;i++)
+    {
+        epid = std::to_string(i);
+        if(!INIConfig::GetInstance()->CheckSection(epid)) break;
+        auto deviceType = INIConfig::GetInstance()->GetAttbute<std::string>(epid, "deviceType");
+        if(deviceType == "OnOffLight"){
+            Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLight, DeviceAttOnOffLight>(
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "name"),
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "location"),
+                DEVICE_TYPE_ON_OFF_LIGHT);
+        }
+        else if(deviceType == "OnOffLightSwitch"){
+            Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLightSwitch, DeviceAttOnOffLightSwitch>(
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "name"),
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "location"),
+                DEVICE_TYPE_ON_OFF_LIGHT_SWITCH);
+        }
+        else if(deviceType == "ContactSensor"){
+            Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceContactSensor, DeviceAttContactSensor>(
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "name"),
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "location"),
+                DEVICE_TYPE_CONTACT_SENSOR);
+        }
+    }
     return ;
 }
 

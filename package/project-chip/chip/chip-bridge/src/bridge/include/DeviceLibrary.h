@@ -39,6 +39,7 @@ protected:
     template <typename T, typename M>
     static std::vector<device_t<T, M>*> devList;
     static chip::EndpointId gCurrentEndpointId;
+    static std::set<chip::EndpointId> runningEP;
 
 private:
     friend DeviceManager & DeviceMgr(void);
@@ -46,8 +47,10 @@ private:
 
 public:
     static void Init();
-    static deviceEP_t* GetDeviceList(uint16_t idx);
+    static chip::EndpointId GetEndpointId();
+    static void AddEndpointId(chip::EndpointId val);
     static deviceEP_t* GetDeviceIndex(uint16_t idx);
+    static deviceEP_t* GetDeviceList(uint16_t idx);
     static void AddDeviceList(deviceEP_t * dev);
     static void DelDeviceList(uint16_t idx);
     static void ListDeviceList();
@@ -92,7 +95,7 @@ public:
         DelDeviceList(dev->endpointId);
         DelDevice<T, M>(dev->endpointId);
         UNUSED_VAR(ep);
-        INIConfig::GetInstance()->DelSection( std::to_string(dev->endpointId));
+        INIConfig::GetInstance()->DelSection(std::to_string(dev->endpointId));
         INIConfig::GetInstance()->write();
         return;
     }
@@ -103,16 +106,16 @@ public:
                                  const chip::Span<DataVersion> & dataVersionStorage) {
         auto dev = epDevice->device;
         EmberAfStatus ret;
-        ChipLogProgress(DeviceLayer, "Gen device EP_Id:%d, Device_Type:%d\n", gCurrentEndpointId, epType->deviceType);
-        for(uint8_t index = 0; index <= gCurrentEndpointId + 1; index++)
+        ChipLogProgress(DeviceLayer, "Gen device EP_Id:%d, Device_Type:%d\n", epDevice->endpointId, epType->deviceType);
+        for(uint8_t index = 0; index <= CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT ; index++)
         {
             if (GetDeviceIndex(index) != nullptr)  { continue; }
             chip::DeviceLayer::StackLock lock;
             epDevice->endpointIndex = index;
             epType->endpointIndex = index;
-            dev->SetEndpointId(gCurrentEndpointId);
+            dev->SetEndpointId(epDevice->endpointId);
             dev->SetParentEndpointId(parentEPId);
-            ret = emberAfSetDynamicEndpoint(index, gCurrentEndpointId, &epDevice->deviceAtt->Endpoint, 
+            ret = emberAfSetDynamicEndpoint(index, epDevice->endpointId, &epDevice->deviceAtt->Endpoint, 
                                             dataVersionStorage, deviceTypeList, parentEPId);
             ChipLogProgress(DeviceLayer, "Call Matter Stack status: emberAfSetDynamicEndpoint ret= %d", ret);
             if (ret == EMBER_ZCL_STATUS_SUCCESS)
@@ -120,13 +123,17 @@ public:
                 AddDevice(epDevice);
                 AddDeviceList(epType);
                 ChipLogProgress(DeviceLayer, "Added device %s to dynamic endpoint %d (index= %d)", 
-                                dev->GetName().c_str(), gCurrentEndpointId, index);
+                                dev->GetName().c_str(), epDevice->endpointId, index);
                 INIConfig::GetInstance()->SetAttribute<int>(
-                    std::to_string(gCurrentEndpointId), "endpointIndex", epType->endpointIndex);
+                    std::to_string(epDevice->endpointId), "endpointIndex", epType->endpointIndex);
                 INIConfig::GetInstance()->SetAttribute<std::string>(
-                    std::to_string(gCurrentEndpointId), "deviceType", epDevice->deviceAtt->deviceTypeName);
+                    std::to_string(epDevice->endpointId), "deviceType", epDevice->deviceAtt->deviceTypeName);
+                INIConfig::GetInstance()->SetAttribute<std::string>(
+                    std::to_string(epDevice->endpointId), "name", epType->name);
+                INIConfig::GetInstance()->SetAttribute<std::string>(
+                    std::to_string(epDevice->endpointId), "location", epType->location);
                 INIConfig::GetInstance()->write();
-                gCurrentEndpointId++;
+                AddEndpointId(epDevice->endpointId);
                 return index;
             }
             if (ret != EMBER_ZCL_STATUS_DUPLICATE_EXISTS) return -1;
@@ -144,17 +151,18 @@ public:
         T DevInst(name, location);
         epDev->device = &DevInst; 
         epDev->deviceAtt = new M(name, location);
+        chip::EndpointId EPId =  GetEndpointId();
 
         epDev->device->SetReachable(true);
-        epDev->endpointId = gCurrentEndpointId;
+        epDev->endpointId = EPId;
 
         epType->deviceType = deviceType;
-        epType->endpointId = gCurrentEndpointId;
+        epType->endpointId = EPId;
         epType->reachable = epDev->device->IsReachable();
         epType->name = std::string(name);
         epType->location = std::string(location);
 
-        AddDeviceEndpoint<T>(epDev, epType, 1, 
+        AddDeviceEndpoint<T>(epDev, epType, 1,
                         chip::Span<const EmberAfDeviceType>(epDev->deviceAtt->DeviceTypes),
                         chip::Span<DataVersion>(epDev->deviceAtt->DataVersions));
     };

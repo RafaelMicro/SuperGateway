@@ -146,3 +146,8 @@ config_error_t INIConfig::CheckAttbute(const std::string &section,
   std::string value;
   return GetValue(section, name, value);
 };
+
+bool INIConfig::CheckSection(const std::string &section) const {
+  std::unordered_map<std::string, std::string> _section;
+  return (GetSection(section, _section)==NO_ERROR)? true : false;
+};
