@@ -204,6 +204,8 @@ chip::EndpointId DeviceManager::GetEndpointId()
 
 void DeviceManager::AddEndpointId(chip::EndpointId val) { runningEP.insert(val); }
 
+void DeviceManager::DelEndpointId(chip::EndpointId val) { runningEP.erase(val); }
+
 void DeviceManager::Init()
 {
     INIConfig::GetInstance()->Init(BRIDGE_CONFIG_FILE);

@@ -49,6 +49,7 @@ public:
     static void Init();
     static chip::EndpointId GetEndpointId();
     static void AddEndpointId(chip::EndpointId val);
+    static void DelEndpointId(chip::EndpointId val);
     static deviceEP_t* GetDeviceIndex(uint16_t idx);
     static deviceEP_t* GetDeviceList(uint16_t idx);
     static void AddDeviceList(deviceEP_t * dev);
@@ -94,6 +95,8 @@ public:
                         dev->endpointId, dev->endpointIndex);
         DelDeviceList(dev->endpointId);
         DelDevice<T, M>(dev->endpointId);
+        DelEndpointId(dev->endpointId);
+
         UNUSED_VAR(ep);
         INIConfig::GetInstance()->DelSection(std::to_string(dev->endpointId));
         INIConfig::GetInstance()->write();
@@ -106,7 +109,7 @@ public:
                                  const chip::Span<DataVersion> & dataVersionStorage) {
         auto dev = epDevice->device;
         EmberAfStatus ret;
-        ChipLogProgress(DeviceLayer, "Gen device EP_Id:%d, Device_Type:%d\n", epDevice->endpointId, epType->deviceType);
+        ChipLogProgress(DeviceLayer, "Gen device EP_Id:%d, Device_Type:%04X", epDevice->endpointId, epType->deviceType);
         for(uint8_t index = 0; index <= CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT ; index++)
         {
             if (GetDeviceIndex(index) != nullptr)  { continue; }

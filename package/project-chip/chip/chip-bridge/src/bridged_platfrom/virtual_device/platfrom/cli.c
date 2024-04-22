@@ -34,6 +34,7 @@ static int command_parser(str_space_t* input, CLI_Token_t *TK) {
 
 uint8_t is_str_eql(str_space_t* A, str_space_t* B)
 {
+  if(A->len != B->len) return 0;
   uint16_t len = A->len < B->len ? A->len : B->len;
   for(int i = 0; i < len; i++) if(A->ptr[i] != B->ptr[i]) return 0;
   return 1;
