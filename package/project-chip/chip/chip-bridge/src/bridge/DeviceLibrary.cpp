@@ -83,8 +83,11 @@ void DeviceManager::DelDeviceList(uint16_t idx) {
 };
 
 void DeviceManager::ListDeviceList() { 
-    ChipLogProgress(DeviceLayer, "EPId\tEPIndex");
-    for(auto ep : epList) ChipLogProgress(DeviceLayer, "%d\t%d", ep->endpointId, ep->endpointIndex);
+    ChipLogProgress(DeviceLayer, "EPId\tEPIndex\tdeviceType\tname\tlocation");
+    for(auto ep : epList) 
+        ChipLogProgress(DeviceLayer, "%d\t%d\t%04x\t%s\t%s", 
+                            ep->endpointId, ep->endpointIndex, ep->deviceType, 
+                            ep->name.c_str(), ep->location.c_str());
 };
 
 chip::EndpointId gFirstDynamicEndpointId = 0;
