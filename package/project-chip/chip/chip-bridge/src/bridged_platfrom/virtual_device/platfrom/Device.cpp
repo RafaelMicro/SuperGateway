@@ -10,13 +10,31 @@
 
 using namespace chip::app::Clusters::Actions;
 
-DeviceOnOffLight::DeviceOnOffLight(std::string szDeviceName, std::string szLocation) : DeviceBase(szDeviceName, szLocation)
+DeviceOnOffLight::DeviceOnOffLight(std::string szDeviceName, std::string szLocation) 
+    : DeviceBase(szDeviceName, szLocation)
 {
     mOn = false;
     mCurrentLevel = 0;
 }
 
 void DeviceOnOffLight::HandleDeviceChange(DeviceBase * device, Changed_t changeMask)
+{
+    if (mChanged_CB) mChanged_CB(this, changeMask);
+}
+
+DeviceDimmableLight::DeviceDimmableLight(std::string szDeviceName, std::string szLocation) 
+    : DeviceBase(szDeviceName, szLocation) { }
+
+void DeviceDimmableLight::HandleDeviceChange(DeviceBase * device, Changed_t changeMask)
+{
+    if (mChanged_CB) mChanged_CB(this, changeMask);
+}
+
+
+DeviceColorTemperatureLight::DeviceColorTemperatureLight(std::string szDeviceName, std::string szLocation) 
+    : DeviceBase(szDeviceName, szLocation) { }
+
+void DeviceColorTemperatureLight::HandleDeviceChange(DeviceBase * device, Changed_t changeMask)
 {
     if (mChanged_CB) mChanged_CB(this, changeMask);
 }
@@ -31,7 +49,8 @@ void DeviceOnOffLightSwitch::HandleDeviceChange(DeviceBase * device, Changed_t c
     if (mChanged_CB) mChanged_CB(this, changeMask);
 }
 
-DeviceContactSensor::DeviceContactSensor(std::string szDeviceName, std::string szLocation) : DeviceBase(szDeviceName, szLocation)
+DeviceContactSensor::DeviceContactSensor(std::string szDeviceName, std::string szLocation) 
+    : DeviceBase(szDeviceName, szLocation)
 {
     mStateValue = false;
 }

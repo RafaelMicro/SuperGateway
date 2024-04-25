@@ -88,6 +88,68 @@ public:
     uint8_t DeviceTypeSize = 2;
 };
 
+class DeviceAttDimmableLight : public DeviceAttBase
+{
+public:
+    std::string deviceTypeName = "DimmableLight";
+    DeviceAttDimmableLight(std::string aname, std::string alocation);
+    EmberAfCluster Clusters[5] = {
+        { Descriptor::Id, RafaelCluster::Descriptor::Attrs, ArraySize(RafaelCluster::Descriptor::Attrs), 
+            0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
+        { BridgedDeviceBasicInformation::Id, RafaelCluster::BridgedDeviceBasic::Attrs, ArraySize(RafaelCluster::BridgedDeviceBasic::Attrs), 
+            0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
+        { RafaelCluster::Scenes::clusterId, RafaelCluster::Scenes::Attrs, ArraySize(RafaelCluster::Scenes::Attrs), 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::Scenes::clientCommands, nullptr,
+            RafaelCluster::Scenes::Events, ArraySize(RafaelCluster::Scenes::Events) },
+        { RafaelCluster::OnOff::clusterId, RafaelCluster::OnOff::Attrs, ArraySize(RafaelCluster::OnOff::Attrs), 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::OnOff::clientCommands, nullptr, 
+            RafaelCluster::OnOff::Events, ArraySize(RafaelCluster::OnOff::Events) },
+        { RafaelCluster::Level::clusterId, RafaelCluster::Level::Attrs, ArraySize(RafaelCluster::Level::Attrs), 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::Level::clientCommands, nullptr, 
+            RafaelCluster::Level::Events, ArraySize(RafaelCluster::Level::Events) },
+        // ADD_SERVER_CLUSTER(RafaelCluster::OccupancySensing),
+    };
+    DataVersion DataVersions[5];
+    uint8_t ClusterSize = 5;
+    const EmberAfEndpointType Endpoint = { Clusters, ArraySize(Clusters), 0};
+    EmberAfDeviceType DeviceTypes[2] = { 
+        ZAP_DEVICE_TYPE(DEVICE_TYPE_DIMABLE_LIGHT), ZAP_DEVICE_TYPE(DEVICE_TYPE_BRIDGED_NODE)
+    };
+    uint8_t DeviceTypeSize = 2;
+};
+
+class DeviceAttColorTemperatureLight : public DeviceAttBase
+{
+public:
+    std::string deviceTypeName = "ColorTemperatureLight";
+    DeviceAttColorTemperatureLight(std::string aname, std::string alocation);
+    EmberAfCluster Clusters[6] = {
+        { Descriptor::Id, RafaelCluster::Descriptor::Attrs, ArraySize(RafaelCluster::Descriptor::Attrs), 
+            0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
+        { BridgedDeviceBasicInformation::Id, RafaelCluster::BridgedDeviceBasic::Attrs, ArraySize(RafaelCluster::BridgedDeviceBasic::Attrs), 
+            0, ZAP_CLUSTER_MASK(SERVER), NULL, nullptr, nullptr },
+        { RafaelCluster::Scenes::clusterId, RafaelCluster::Scenes::Attrs, ArraySize(RafaelCluster::Scenes::Attrs), 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::Scenes::clientCommands, nullptr,
+            RafaelCluster::Scenes::Events, ArraySize(RafaelCluster::Scenes::Events) },
+        { RafaelCluster::OnOff::clusterId, RafaelCluster::OnOff::Attrs, ArraySize(RafaelCluster::OnOff::Attrs), 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::OnOff::clientCommands, nullptr, 
+            RafaelCluster::OnOff::Events, ArraySize(RafaelCluster::OnOff::Events) },
+        { RafaelCluster::Level::clusterId, RafaelCluster::Level::Attrs, ArraySize(RafaelCluster::Level::Attrs), 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::Level::clientCommands, nullptr, 
+            RafaelCluster::Level::Events, ArraySize(RafaelCluster::Level::Events) },
+        { RafaelCluster::ColorControl::clusterId, RafaelCluster::ColorControl::Attrs, ArraySize(RafaelCluster::ColorControl::Attrs), 
+            0, ZAP_CLUSTER_MASK( SERVER ), NULL, RafaelCluster::ColorControl::clientCommands, nullptr, 
+            RafaelCluster::ColorControl::Events, ArraySize(RafaelCluster::ColorControl::Events) },
+    };
+    DataVersion DataVersions[6];
+    uint8_t ClusterSize = 6;
+    const EmberAfEndpointType Endpoint = { Clusters, ArraySize(Clusters), 0};
+    const EmberAfDeviceType DeviceTypes[2] = { 
+        ZAP_DEVICE_TYPE(DEVICE_TYPE_COLOR_TEMPERATURE_LIGHT), ZAP_DEVICE_TYPE(DEVICE_TYPE_BRIDGED_NODE)
+    };
+    uint8_t DeviceTypeSize = 2;
+};
+
 class DeviceAttOnOffLightSwitch : public DeviceAttBase
 {
 public:

@@ -16,6 +16,29 @@ private:
     void HandleDeviceChange(DeviceBase * device, Changed_t changeMask);
 };
 
+class DeviceDimmableLight : public DeviceBase, public ClusterOnOff, public ClusterLevelControl, public ClusterColorControl
+{
+public:
+    DeviceDimmableLight(std::string szDeviceName, std::string szLocation);
+    using DeviceCB_fn = std::function<void(DeviceDimmableLight *, Changed_t)>;
+    DeviceCB_fn mChanged_CB;
+
+private:
+    void HandleDeviceChange(DeviceBase * device, Changed_t changeMask);
+};
+
+
+class DeviceColorTemperatureLight : public DeviceBase, public ClusterOnOff, public ClusterLevelControl, public ClusterColorControl
+{
+public:
+    DeviceColorTemperatureLight(std::string szDeviceName, std::string szLocation);
+    using DeviceCB_fn = std::function<void(DeviceColorTemperatureLight *, Changed_t)>;
+    DeviceCB_fn mChanged_CB;
+
+private:
+    void HandleDeviceChange(DeviceBase * device, Changed_t changeMask);
+};
+
 class DeviceOnOffLightSwitch : public DeviceBase, public ClusterOnOff
 {
 public:

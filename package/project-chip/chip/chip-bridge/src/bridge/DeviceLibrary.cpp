@@ -43,7 +43,7 @@ using namespace chip::DeviceLayer;
 using namespace chip::app::Clusters;
 
 #ifndef BRIDGE_CONFIG_FILE
-#define BRIDGE_CONFIG_FILE "./rafael_bridged.ini"
+#define BRIDGE_CONFIG_FILE "/tmp/chip_rafael_bridged.ini"
 #endif
 
 namespace Rafael {
@@ -227,6 +227,18 @@ void DeviceManager::Init()
                 INIConfig::GetInstance()->GetAttbute<std::string>(epid, "name"),
                 INIConfig::GetInstance()->GetAttbute<std::string>(epid, "location"),
                 DEVICE_TYPE_ON_OFF_LIGHT);
+        }
+        else if(deviceType == "DimmableLight"){
+            Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceDimmableLight, DeviceAttDimmableLight>(
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "name"),
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "location"),
+                DEVICE_TYPE_ON_OFF_LIGHT_SWITCH);
+        }
+        else if(deviceType == "ColorTemperatureLight"){
+            Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceColorTemperatureLight, DeviceAttColorTemperatureLight>(
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "name"),
+                INIConfig::GetInstance()->GetAttbute<std::string>(epid, "location"),
+                DEVICE_TYPE_ON_OFF_LIGHT_SWITCH);
         }
         else if(deviceType == "OnOffLightSwitch"){
             Rafael::DeviceLibrary::DeviceMgr().publishDevice<DeviceOnOffLightSwitch, DeviceAttOnOffLightSwitch>(

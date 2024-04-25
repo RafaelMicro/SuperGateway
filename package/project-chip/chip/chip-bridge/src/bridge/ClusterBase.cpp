@@ -17,6 +17,12 @@ DeviceAttBase::DeviceAttBase(std::string aname, std::string alocation)
 DeviceAttOnOffLight::DeviceAttOnOffLight(std::string aname, std::string alocation) 
     : DeviceAttBase(aname, alocation) {};
 
+DeviceAttDimmableLight::DeviceAttDimmableLight(std::string aname, std::string alocation) 
+    : DeviceAttBase(aname, alocation) {};
+
+DeviceAttColorTemperatureLight::DeviceAttColorTemperatureLight(std::string aname, std::string alocation) 
+    : DeviceAttBase(aname, alocation) {};
+
 DeviceAttOnOffLightSwitch::DeviceAttOnOffLightSwitch(std::string aname, std::string alocation) 
     : DeviceAttBase(aname, alocation) {};
 
@@ -88,4 +94,47 @@ void ClusterBooleanState::SetStateValue(bool aStateValue)
     bool changed = aStateValue ^ mStateValue;
     mStateValue = aStateValue;
     // if ((changed) && (mChanged_CB)) mChanged_CB(this, ActionOnOff);
+}
+
+
+uint8_t ClusterColorControl::GetCurrentHue() { return mCurrentHue; }
+
+void ClusterColorControl::SetCurrentHue(uint8_t val) { 
+    bool changed = ( mCurrentHue == val ) ? false : true ;
+    mCurrentHue = val;
+}
+
+uint8_t ClusterColorControl::GetCurrentSaturation() { return mCurrentSaturation; }
+
+void ClusterColorControl::SetCurrentSaturation(uint8_t val) { 
+    bool changed = ( mCurrentSaturation == val ) ? false : true ;
+    mCurrentSaturation = val;
+}
+
+uint16_t ClusterColorControl::GetCurrentX() { return mCurrentX; }
+
+void ClusterColorControl::SetCurrentX(uint16_t val) { 
+    bool changed = ( mCurrentX == val ) ? false : true ;
+    mCurrentX = val;
+}
+
+uint16_t ClusterColorControl::GetCurrentY() { return mCurrentY; }
+
+void ClusterColorControl::SetCurrentY(uint16_t val) { 
+    bool changed = ( mCurrentY == val ) ? false : true ;
+    mCurrentY = val;
+}
+
+uint16_t ClusterColorControl::GetEnhancedCurrentHue() { return mEnhancedCurrentHue; }
+
+void ClusterColorControl::SetEnhancedCurrentHue(uint16_t val) { 
+    bool changed = ( mEnhancedCurrentHue == val ) ? false : true ;
+    mEnhancedCurrentHue = val;
+}
+
+uint8_t ClusterColorControl::GetEnhancedColorMode() { return mEnhancedColorMode; }
+
+void ClusterColorControl::SetEnhancedColorMode(uint8_t val) { 
+    bool changed = ( mEnhancedColorMode == val ) ? false : true ;
+    mEnhancedColorMode = val;
 }

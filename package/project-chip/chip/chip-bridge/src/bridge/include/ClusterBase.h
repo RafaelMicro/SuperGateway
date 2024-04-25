@@ -52,8 +52,6 @@ protected:
     chip::EndpointId mEndpointId;
     std::string mName;
     std::string mLocation;
-    // char mName[kDeviceNameSize];
-    // char mLocation[kDeviceNameSize];
     chip::EndpointId mParentEndpointId;
     uint8_t mDeviceType;
     std::string mZone;
@@ -76,6 +74,32 @@ public:
     void SetCurrentLevel(uint8_t aCurrentLevel);
     uint8_t mCurrentLevel;
     virtual ~ClusterLevelControl() {};
+};
+
+class ClusterColorControl
+{
+public:
+    uint8_t GetCurrentHue();
+    uint8_t GetCurrentSaturation();
+    uint16_t GetCurrentX();
+    uint16_t GetCurrentY();
+    uint16_t GetEnhancedCurrentHue();
+    uint8_t GetEnhancedColorMode();
+    
+    void SetCurrentHue(uint8_t val);
+    void SetCurrentSaturation(uint8_t val);
+    void SetCurrentX(uint16_t val);
+    void SetCurrentY(uint16_t val);
+    void SetEnhancedCurrentHue(uint16_t val);
+    void SetEnhancedColorMode(uint8_t val);
+
+    uint8_t mCurrentHue;
+    uint8_t mCurrentSaturation;
+    uint8_t mEnhancedColorMode;
+    uint16_t mCurrentX;
+    uint16_t mCurrentY;
+    uint16_t mEnhancedCurrentHue;
+    virtual ~ClusterColorControl() {};
 };
 
 class ClusterBooleanState
