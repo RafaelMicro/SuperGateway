@@ -1,0 +1,18 @@
+menu "Configuration for Matter Host"
+
+config CHIP_TOOL
+	bool 
+	prompt "Build Matter Controller (chip-tool)"
+	default n
+
+config CHIP_OTA_PROVIDER
+	bool 
+	prompt "Build Matter OTA Provider (chip-ota-provider)"
+	default n
+
+config CHIP_BRIDGE
+	bool 
+	prompt "Build Matter Bridge (chip)"
+	default n
+
+endmenu
