@@ -12,9 +12,9 @@ PKG_BUILD_DEPENDS:=gn/host
 PKG_CONFIG_DEPENDS:= CONFIG_CHIP_OTA_PROVIDER CONFIG_CHIP_BRIDGE CONFIG_CHIP_TOOL
 
 include $(INCLUDE_DIR)/package.mk
-TARGET_CXXFLAGS += -DFATCONFDIR=\"/root\" -DSYSCONFDIR=\"/root\" -DLOCALSTATEDIR=\"/root\" -Wno-format-nonliteral -Wno-unused -Wno-unknown-warning-option -fexceptions
+TARGET_CXXFLAGS += -DFATCONFDIR=\"/root\" -DSYSCONFDIR=\"/root\" -DLOCALSTATEDIR=\"/root\" -Wno-format-nonliteral -Wno-unused -Wno-unknown-warning-option -fexceptions -latomic
 TARGET_CFLAGS += -DFATCONFDIR=\"/root\" -DSYSCONFDIR=\"/root\" -DLOCALSTATEDIR=\"/root\" -Wno-format-nonliteral -Wno-unused -Wno-unknown-warning-option -fexceptions
-
+TARGET_LDFLAGS += -latomic
 
 CHIP_OTA_PROVIDER_OUT_DIR:=$(PKG_BUILD_DIR)/chip-ota-provider
 OTA_PROVIDER_SOURCE_DIR:=$(abspath $(realpath $(dir $(lastword $(MAKEFILE_LIST))))/../../package/project-chip/chip/chip-bridge/src)
