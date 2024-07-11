@@ -4,7 +4,7 @@ PKG_NAME:=chip
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKG_LICENSE_FILES:=LICENSE
-LOCAL_SOURCE_DIR:=$(abspath $(realpath $(dir $(lastword $(MAKEFILE_LIST))))/../../../third_party/connectedhomeip)
+LOCAL_SOURCE_DIR:=$(abspath $(realpath $(dir $(lastword $(MAKEFILE_LIST))))/../../../../third_party/connectedhomeip)
 MAKEFILE_DIR:=$(abspath $(realpath $(dir $(lastword $(MAKEFILE_LIST)))))
 CHIP_BUILD_ENV_DIR:=$(STAGING_DIR_HOST)/share/chip-build-env
 PKG_BUILD_PARALLEL:=1
@@ -17,7 +17,7 @@ TARGET_CFLAGS += -DFATCONFDIR=\"/root\" -DSYSCONFDIR=\"/root\" -DLOCALSTATEDIR=\
 TARGET_LDFLAGS += -latomic
 
 CHIP_OTA_PROVIDER_OUT_DIR:=$(PKG_BUILD_DIR)/chip-ota-provider
-OTA_PROVIDER_SOURCE_DIR:=$(abspath $(realpath $(dir $(lastword $(MAKEFILE_LIST))))/../../package/project-chip/chip/chip-bridge/src)
+OTA_PROVIDER_SOURCE_DIR:=$(abspath $(realpath $(dir $(lastword $(MAKEFILE_LIST))))/../../../package/project-chip/chip/chip-bridge/src)
 CHIP_BRIDGE_OUT_DIR:=$(PKG_BUILD_DIR)/chip-bidge
 CHIP_TOOL_OUT_DIR:=$(PKG_BUILD_DIR)/chip-tool
 
@@ -27,7 +27,7 @@ define Package/chip
 	CATEGORY:=Network
 	TITLE:=Rafael Matter Host Tool
 	URL:=https://github.com/project-chip/connectedhomeip
-	DEPENDS:=+libstdcpp +libopenssl +glib2 +libavahi-client
+	DEPENDS:=+libstdcpp +libopenssl +glib2 +libavahi-client +libatomic
 	MENU:=1
 endef
 
