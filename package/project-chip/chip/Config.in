@@ -15,4 +15,9 @@ config CHIP_BRIDGE
 	prompt "Build Matter Bridge (chip)"
 	default n
 
+config CHIP_NETWORK_MANAGER
+	bool
+	prompt "Build Network manager"
+	default n
+
 endmenu
